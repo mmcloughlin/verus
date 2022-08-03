@@ -74,6 +74,8 @@ pub(crate) fn prelude_nodes() -> Vec<Node> {
                 :skolemid skolem_prelude_fuel_defaults
             ))
         ))
+        (declare-sort StrLitId 0)
+        (declare-fun str_reveal_bool (StrLitId) Bool)
 
         // Polymorphism
         (declare-sort [Poly] 0)

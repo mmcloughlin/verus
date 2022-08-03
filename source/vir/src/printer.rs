@@ -195,6 +195,7 @@ fn expr_to_node(expr: &Expr) -> Node {
                 match cnst {
                     Constant::Bool(val) => str_to_node(&format!("{}", val)),
                     Constant::Nat(val) => str_to_node(&format!("{}", val)),
+                    Constant::StrSlice(val, _) => str_to_node(&format!("\"{}\"", val))
                 }
             }
         ),
@@ -308,6 +309,9 @@ fn expr_to_node(expr: &Expr) -> Node {
         }
         ExprX::Fuel(fun, fuel) => {
             nodes!(fuel {fun_to_node(fun)} {str_to_node(&format!("{}", fuel))})
+        }, 
+        ExprX::FuelString(_) => {
+            nodes!(str_fuel)
         }
         ExprX::Header(header_expr) => nodes!(header {header_expr_to_node(header_expr)}),
         ExprX::Admit => node!(admit),
@@ -398,6 +402,7 @@ fn function_to_node(function: &FunctionX) -> Node {
         broadcast_forall: _,
         mask_spec,
         is_const,
+        is_string_literal,
         publish,
         attrs,
         body,
@@ -560,6 +565,9 @@ fn function_to_node(function: &FunctionX) -> Node {
     nodes.push(extra_dependencies_node);
     if *is_const {
         nodes.push(str_to_node("+is_const"));
+    }
+    if *is_string_literal {
+        nodes.push(str_to_node("+is_string_literal"));
     }
     if let Some(publish) = publish {
         nodes.push(nodes!(publish {Node::Atom(format!("{}", publish))}));

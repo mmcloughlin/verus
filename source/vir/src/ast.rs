@@ -9,7 +9,6 @@ use crate::def::Spanned;
 use air::ast::Span;
 use air::errors::Error;
 use std::sync::Arc;
-
 pub use air::ast::{Binder, Binders};
 
 /// Result<T, VirErr> is used when an error might need to be reported to the user
@@ -276,6 +275,8 @@ pub enum Constant {
     Bool(bool),
     /// non-negative integer of arbitrary size (IntRange::Nat); use subtraction to get negative numbers
     Nat(Arc<String>),
+    /// Hold generated string slices in here
+    StrSlice(Arc<String>, bool)
 }
 
 #[derive(Debug)]
@@ -435,6 +436,8 @@ pub enum ExprX {
     Block(Stmts, Option<Expr>),
     /// assert_by with smt.arith.nl=true
     AssertQuery { requires: Exprs, ensures: Exprs, proof: Expr, mode: AssertQueryMode },
+    /// Fuel for string  
+    FuelString(Path)
 }
 
 /// Statement, similar to rustc_hir::Stmt
@@ -583,6 +586,7 @@ pub struct FunctionX {
     /// However, if ret.x.mode != Spec, there are some differences: the const can dually be used as spec,
     /// and the body is restricted to a subset of expressions that are spec-safe.
     pub is_const: bool,
+    pub is_string_literal: bool,
     /// For public spec functions, publish == None means that the body is private
     /// even though the function is public, the bool indicates false = opaque, true = visible
     /// the body is public

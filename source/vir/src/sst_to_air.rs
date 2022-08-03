@@ -313,6 +313,7 @@ pub(crate) fn constant_to_expr(_ctx: &Ctx, constant: &crate::ast::Constant) -> E
     match constant {
         crate::ast::Constant::Bool(b) => Arc::new(ExprX::Const(Constant::Bool(*b))),
         crate::ast::Constant::Nat(s) => Arc::new(ExprX::Const(Constant::Nat(s.clone()))),
+        crate::ast::Constant::StrSlice(_, _) => panic!("should be handled elsewhere"),
     }
 }
 
@@ -1613,7 +1614,15 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
                 state.map_span(&stm, SpanKind::Full);
             }
             stmts
-        }
+        }, 
+        StmX::FuelString(path) => {
+            use crate::avec;
+            let str_var = Arc::new(ExprX::Var(crate::def::prefix_str(&path_to_air_ident(path))));
+            let reveal_fn = Arc::new("str_reveal_bool".to_string());
+            let expr = Arc::new(ExprX::Apply(reveal_fn, avec![str_var]));
+            let stmt = Arc::new(StmtX::Assume(expr));
+            vec![stmt]
+        },
         StmX::Block(stms) => {
             if ctx.debug {
                 state.push_scope();

@@ -21,13 +21,15 @@ use rustc_ast::{Attribute, BorrowKind, LitKind, Mutability};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::{
     BinOpKind, BindingAnnotation, Block, Destination, Expr, ExprKind, Guard, Local, LoopSource,
-    Node, Pat, PatKind, QPath, Stmt, StmtKind, UnOp,
+    Node, Pat, PatKind, QPath, Stmt, StmtKind, UnOp, Path
 };
+
 use rustc_middle::ty::subst::GenericArgKind;
 use rustc_middle::ty::{PredicateKind, TyCtxt, TyKind};
 use rustc_span::def_id::DefId;
 use rustc_span::source_map::Spanned;
 use rustc_span::Span;
+use rustc_span::symbol::Symbol;
 use std::sync::Arc;
 use vir::ast::{
     ArithOp, ArmX, AssertQueryMode, BinaryOp, BitwiseOp, CallTarget, Constant, ExprX, FieldOpr,
@@ -491,6 +493,8 @@ fn fn_call_to_vir<'tcx>(
     let is_tracked_exec_borrow = f_name == "pervasive::modes::tracked_exec_borrow";
     let is_tracked_get = f_name == "builtin::Tracked::<A>::get";
     let is_tracked_split_tuple = f_name.starts_with("builtin::tracked_split_tuple");
+    let is_new_strlit = tcx.is_diagnostic_item(Symbol::intern("pervasive::string::new_strlit"), f);
+    let is_strslice_reveal = tcx.is_diagnostic_item(Symbol::intern("pervasive::string::StrSlice::reveal"), f);
     let is_spec = is_admit
         || is_no_method_body
         || is_requires
@@ -892,6 +896,35 @@ fn fn_call_to_vir<'tcx>(
     } else {
         Box::new(std::iter::repeat(None))
     };
+    
+    if is_new_strlit {
+        let arg0 = args[0];
+        let arg1 = args[1];
+
+        let (s, reveal) = match (&arg0.kind, &arg1.kind) {
+            (ExprKind::Lit(lit0), ExprKind::Lit(lit1)) => {
+                match (&lit0.node, &lit1.node) {
+                    (rustc_ast::LitKind::Str(s,_), rustc_ast::LitKind::Bool(reveal)) => (s.to_string(), reveal),  
+                    _ => panic!("invalid types to new_strlit")
+                }
+            }, 
+            _ => todo!()
+        };
+
+
+        let c = vir::ast::Constant::StrSlice(Arc::new(s.to_string()), *reveal);
+        return Ok(mk_expr(ExprX::Const(c)));
+    }
+
+    if is_strslice_reveal {
+        return match &expr.kind {
+            ExprKind::MethodCall(_, _, [Expr {hir_id:_, kind: ExprKind::Path(QPath::Resolved(_,Path {res: Res::Def(_, id), ..}) ),.. }], _) => {
+                let mypath = def_id_to_vir_path(bctx.ctxt.tcx, *id);
+                Ok(mk_expr(ExprX::FuelString(mypath)))
+            },
+            _ => panic!("Expected a method call for StrSlice::reveal with one argument but did not receive it")
+        };
+    }
 
     let mut vir_args = args
         .iter()
@@ -1767,14 +1800,17 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
                 ExprKind::Path(QPath::Resolved(
                     None,
                     rustc_hir::Path { res: res @ Res::Def(DefKind::Ctor(_, _), _), .. },
-                )) => Some(expr_tuple_datatype_ctor_to_vir(
-                    bctx,
-                    expr,
-                    res,
-                    *args_slice,
-                    fun.span,
-                    modifier,
-                )),
+                )) => {
+
+                    Some(expr_tuple_datatype_ctor_to_vir(
+                        bctx,
+                        expr,
+                        res,
+                        *args_slice,
+                        fun.span,
+                        modifier,
+                    ))
+                },
                 ExprKind::Path(qpath) => {
                     let def = bctx.types.qpath_res(&qpath, fun.hir_id);
                     match def {

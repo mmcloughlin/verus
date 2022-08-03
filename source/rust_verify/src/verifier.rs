@@ -685,7 +685,7 @@ impl Verifier {
             function_decl_commands.push((commands.clone(), comment.clone()));
         }
         ctx.fun = None;
-
+        
         // Collect function definitions
         let mut funs: HashMap<Fun, (Function, Visibility)> = HashMap::new();
         for function in &krate.functions {
@@ -831,7 +831,7 @@ impl Verifier {
                     continue;
                 }
                 let decl_commands = &fun_axioms[f];
-                let comment = "Function-Axioms ".to_string() + &fun_as_rust_dbg(f);
+                let comment = "Function-Axioms ".to_string() + &fun_as_rust_dbg(f); 
                 self.run_commands(&mut air_context, &decl_commands, &comment);
                 function_axiom_commands.push((decl_commands.clone(), comment.clone()));
                 funs.remove(f);
@@ -1002,7 +1002,6 @@ impl Verifier {
             vir::context::GlobalCtx::new(&krate, air_no_span.clone(), inferred_modes)?;
         vir::recursive_types::check_traits(&krate, &global_ctx)?;
         let krate = vir::ast_simplify::simplify_krate(&mut global_ctx, &krate)?;
-
         if self.args.log_all || self.args.log_vir_simple {
             let mut file =
                 self.create_log_file(None, None, crate::config::VIR_SIMPLE_FILE_SUFFIX)?;

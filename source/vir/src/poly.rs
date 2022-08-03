@@ -422,6 +422,7 @@ fn poly_expr(ctx: &Ctx, state: &mut State, expr: &Expr) -> Expr {
         }
         ExprX::AssertBV(e) => mk_expr(ExprX::AssertBV(poly_expr(ctx, state, e))),
         ExprX::Fuel(..) => expr.clone(),
+        ExprX::FuelString(_) => expr.clone(),
         ExprX::Header(..) => panic!("Header should already be removed"),
         ExprX::Admit => expr.clone(),
         ExprX::Forall { vars, require, ensure, proof } => {
@@ -564,6 +565,7 @@ fn poly_function(ctx: &Ctx, function: &Function) -> Function {
         broadcast_forall,
         mask_spec,
         is_const,
+        is_string_literal,
         publish,
         attrs,
         body,
@@ -689,6 +691,7 @@ fn poly_function(ctx: &Ctx, function: &Function) -> Function {
         broadcast_forall,
         mask_spec,
         is_const: *is_const,
+        is_string_literal: *is_string_literal,
         publish: *publish,
         attrs: attrs.clone(),
         body,
@@ -727,4 +730,11 @@ pub fn poly_krate_for_module(ctx: &mut Ctx, krate: &Krate) -> Krate {
         ctx.datatype_map.insert(datatype.x.path.clone(), datatype.clone());
     }
     Arc::new(kratex)
+}
+pub fn poly_closed_expr(ctx: &Ctx, expr: &Expr) -> Expr {
+    let mut types = ScopeMap::new();
+    types.push_scope(true);
+
+    let mut state = State { types, is_trait: false };
+    poly_expr(ctx, &mut state, expr)
 }

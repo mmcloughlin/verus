@@ -17,6 +17,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+
 pub type ChosenTrigger = Vec<(Span, String)>;
 #[derive(Debug, Clone)]
 pub struct ChosenTriggers {

@@ -258,6 +258,7 @@ where
                     expr_visitor_control_flow!(expr_visitor_dfs(e, map, mf));
                 }
                 ExprX::Fuel(_, _) => (),
+                ExprX::FuelString(_) => (),
                 ExprX::Header(_) => {
                     panic!("header expression not allowed here: {:?}", &expr.span);
                 }
@@ -388,6 +389,7 @@ where
         broadcast_forall,
         mask_spec,
         is_const: _,
+        is_string_literal: _,
         publish: _,
         attrs: _,
         body,
@@ -583,6 +585,7 @@ where
             ExprX::Assign { init_not_mut: *init_not_mut, lhs: expr1, rhs: expr2 }
         }
         ExprX::Fuel(path, fuel) => ExprX::Fuel(path.clone(), *fuel),
+        ExprX::FuelString(path) => ExprX::FuelString(path.clone()),
         ExprX::Header(_) => {
             return err_str(&expr.span, "header expression not allowed here");
         }
@@ -774,6 +777,7 @@ where
         broadcast_forall,
         mask_spec,
         is_const,
+        is_string_literal,
         publish,
         attrs,
         body,
@@ -851,6 +855,7 @@ where
     let attrs = attrs.clone();
     let extra_dependencies = extra_dependencies.clone();
     let is_const = *is_const;
+    let is_string_literal = *is_string_literal;
     let publish = *publish;
     let body = body.as_ref().map(|e| map_expr_visitor_env(e, map, env, fe, fs, ft)).transpose()?;
     map.pop_scope();
@@ -885,6 +890,7 @@ where
         broadcast_forall,
         mask_spec,
         is_const,
+        is_string_literal,
         publish,
         attrs,
         body,

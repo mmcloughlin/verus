@@ -1,45 +1,36 @@
-use builtin_macros::*;
-use builtin::*;
 mod pervasive;
-use pervasive::{*, option::Option, result::Result};
 
-use pervasive::seq::*;
-use crate::pervasive::vec::*;
+#[allow(unused_imports)]
+use builtin_macros::*;
 
+verus! {
+    #[allow(unused_imports)]
+    use pervasive::string::*; 
+    const GREETING: StrSlice<'static> = new_strlit("Hello World", true);
+    const PARTIAL_GREETING: StrSlice<'static> = new_strlit("Hello", true);
+    const OTHER_GREETING: StrSlice<'static> = new_strlit("Hello World!", true);
 
-#[derive(PartialEq, Eq, Structural)]
-struct S<A> {
-    a: A,
-    b: bool,
+    fn string_lit<'a>() {
+        GREETING.reveal();
+        PARTIAL_GREETING.reveal();
+
+        assert(GREETING.is_ascii());
+        assert(PARTIAL_GREETING.is_ascii());
+        let part = GREETING.substring(0, 5);
+        assert(part.view().ext_equal(PARTIAL_GREETING.view()));
+        assert(part.view() === PARTIAL_GREETING.view());
+    }
+
+    // fn str_1<'a>(s1: StrSlice<'a>, s2: StrSlice<'a>)
+    //     requires
+    //         s1.view() === s2.view(),
+    //         s1.view().len() == 10,
+    // {
+    //     let a1 = s1.substring(3, 5);
+    //     let a2 = s2.substring(3, 5);
+    //     assert(a1.view() === a2.view());
+    // }
 }
-
-fn add1(a: &mut u32) {
-    requires([
-        *old(a) < 10,
-    ]);
-    ensures([
-        *a == *old(a) + 1,
-    ]);
-    *a = *a + 1;
-}
-
-fn foo(s: S<u32>) {
-    // let mut s = s;
-    let mut s = S { a: 5, b: false };
-    add1(&mut s.a);
-    assert(s.a == 6);
-    assert(s.b == false);
-    assert(s == S { a: 6, b: false });
-}
-
-// The following causes a trigger loop (useful for testing rlimit-related features):
-//
-// fndecl!(fn f(x: nat, y: nat) -> bool);
-//
-// #[proof] fn goodbye_z3() {
-//     requires(forall(|x: nat, y: nat| f(x + 1, 2 * y) && f(2 * x, y + x) || f(y, x) >>= (#[trigger] f(x, y))));
-//     ensures(forall(|x: nat, y: nat| x > 2318 && y < 100 >>= f(x, y)));
-// }
 
 fn main() {}
 

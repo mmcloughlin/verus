@@ -1,6 +1,6 @@
 use crate::ast::{
     Fun, Function, FunctionKind, GenericBoundX, Ident, Idents, Mode, Param, ParamX, Params,
-    SpannedTyped, Typ, TypBounds, TypX, Typs, VirErr,
+    SpannedTyped, Typ, TypBounds, TypX, Typs, VirErr, IntRange
 };
 use crate::ast_util::QUANT_FORALL;
 use crate::context::Ctx;
@@ -8,16 +8,18 @@ use crate::def::{
     new_internal_qid, prefix_ensures, prefix_fuel_id, prefix_fuel_nat, prefix_pre_var,
     prefix_recursive_fun, prefix_requires, suffix_global_id, suffix_local_stmt_id,
     suffix_typ_param_id, unique_local, CommandsWithContext, SnapPos, Spanned, FUEL_BOOL,
-    FUEL_BOOL_DEFAULT, FUEL_LOCAL, FUEL_TYPE, SUCC, ZERO,
+    FUEL_BOOL_DEFAULT, FUEL_LOCAL, FUEL_TYPE, SUCC, ZERO, CommandsWithContextX
 };
+use crate::poly::poly_closed_expr;
 use crate::sst::{BndX, Exp, ExpX, Par, ParPurpose, ParX, Pars, Stm, StmX};
 use crate::sst_to_air::{
-    exp_to_expr, fun_to_air_ident, typ_invariant, typ_to_air, ExprCtxt, ExprMode,
+    exp_to_expr, fun_to_air_ident, typ_invariant, typ_to_air, ExprCtxt, ExprMode, path_to_air_ident,
 };
 use crate::util::vec_map;
+use crate::{avec, string_utils::*};
 use air::ast::{
-    BinaryOp, Bind, BindX, Binder, BinderX, Command, CommandX, Commands, DeclX, Expr, ExprX, Quant,
-    Span, Trigger, Triggers,
+    BinaryOp, Bind, BindX, Binder, BinderX, Command, CommandX, Commands, DeclX, Decl, Expr,
+    ExprX, Quant, Span, Trigger, Triggers, Constant, MultiOp,
 };
 use air::ast_util::{
     bool_typ, ident_apply, ident_binder, ident_var, mk_and, mk_bind_expr, mk_eq, mk_implies,
@@ -461,7 +463,7 @@ pub fn func_axioms_to_air(
     match function.x.mode {
         Mode::Spec => {
             // Body
-            if public_body {
+            if public_body && !function.x.is_string_literal {
                 if let Some(body) = &function.x.body {
                     new_fun_ssts = func_body_to_air(
                         ctx,
@@ -695,6 +697,25 @@ pub fn func_def_to_air(
             }
             let enss = Arc::new(enss);
 
+            if function.x.is_const && function.x.is_string_literal {
+                if let crate::ast::ExprX::Const(crate::ast::Constant::StrSlice(s, reveal)) =
+                    &function.x.body.as_ref().expect("string_literal always has a body").x
+                {
+                    if !reveal {
+                        return Ok((avec![], vec![], state.fun_ssts));
+                    }
+                    let (commands,snaps) = string_to_air(
+                        ctx,
+                        function.x.name.clone(),
+                        &s,
+                        function.span.clone(),
+                    );
+                    return Ok((commands, snaps, state.fun_ssts));
+                } else {
+                    panic!("unexpected body for string_literal");
+                }
+            }
+
             // AST --> SST
             state.ret_post = Some((dest.clone(), ens_stmts.clone(), enss.clone()));
             let (mut stm, skip_ensures) =
@@ -755,4 +776,192 @@ pub fn func_def_to_air(
             Ok((Arc::new(commands), snap_map, state.fun_ssts))
         }
     }
+}
+
+fn string_is_ascii_to_air(
+    ctx: &Ctx,
+    fun: Fun,
+    _string: &String,
+    span: Span,
+    _commands: &mut Vec<Command>,
+) -> Expr {
+    let strslice_ty = get_strslice_vir_ty();
+    let call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(fun, Arc::new(vec![])),
+        Arc::new(vec![]),
+    );
+    let spanned_call = Arc::new(SpannedTyped { span: span.clone(), x: call, typ: strslice_ty });
+
+    let is_ascii_ty = get_is_ascii_vir_ty();
+    let is_ascii_fun = get_is_ascii_vir_fun();
+    let is_ascii_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(is_ascii_fun, Arc::new(vec![])),
+        Arc::new(vec![spanned_call]),
+    );
+
+    let spanned_is_ascii_call =
+        Arc::new(SpannedTyped { span: span.clone(), x: is_ascii_call, typ: is_ascii_ty });
+    let expr = poly_closed_expr(ctx, &spanned_is_ascii_call);
+    let exp = crate::ast_to_sst::expr_to_exp(ctx, &HashMap::new(), &Arc::new(vec![]), &expr)
+        .expect("internal compiler error");
+
+    exp_to_expr(ctx, &exp, &ExprCtxt { mode: ExprMode::Spec, is_bit_vector: false, bit_vector_typ_hint: None})
+        .expect("internal compiler error")
+}
+
+fn string_index_to_air(
+    ctx: &Ctx,
+    fun: Fun,
+    index: usize,
+    val: u8,
+    span: Span,
+    _commands: &mut Vec<Command>,
+) -> Expr {
+    let strslice_ty = get_strslice_vir_ty();
+    let fun_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(fun, Arc::new(vec![])),
+        Arc::new(vec![]),
+    );
+
+    let spanned_fun_call =
+        Arc::new(SpannedTyped { span: span.clone(), x: fun_call, typ: strslice_ty });
+    let view_ty = get_view_vir_ty();
+    let view_fun = get_view_vir_fun();
+
+    let view_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(view_fun, Arc::new(vec![])),
+        Arc::new(vec![spanned_fun_call.clone()]),
+    );
+
+    let spanned_view_call =
+        Arc::new(SpannedTyped { span: span.clone(), x: view_call, typ: view_ty });
+    
+    let index_ty = get_index_vir_ty();
+    let indexed_expr = crate::ast::ExprX::Const(crate::ast::Constant::Nat(Arc::new(index.to_string())));
+    let spanned_indexed_expr = Arc::new(SpannedTyped { span: span.clone(), x: indexed_expr, typ: index_ty.clone() });
+
+    let index_ret_ty = get_index_ret_vir_ty();
+    let index_fun = get_index_vir_fun();
+
+    let index_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(index_fun, avec![Arc::new(TypX::Int(IntRange::U(8)))]),
+        avec![spanned_view_call, spanned_indexed_expr],
+    );
+    let spanned_index_call =
+        Arc::new(SpannedTyped { span: span.clone(), x: index_call, typ: index_ret_ty.clone() });
+
+
+    let expr = poly_closed_expr(ctx, &spanned_index_call);
+
+    let exp = crate::ast_to_sst::expr_to_exp(ctx, &HashMap::new(), &Arc::new(vec![]), &expr)
+        .expect("internal compiler error");
+    let expr = exp_to_expr(ctx, &exp, &ExprCtxt { mode: ExprMode::Spec, is_bit_vector: false, bit_vector_typ_hint: None }).expect("internal compiler error");
+    
+    
+    let val_expr = Arc::new(ExprX::Apply(Arc::new("I".to_string()), avec![Arc::new(ExprX::Const(Constant::Nat(Arc::new(val.to_string()))))]));
+    
+    Arc::new(ExprX::Binary(BinaryOp::Eq, expr, val_expr))
+}
+
+fn string_len_to_air(ctx: &Ctx, fun: Fun, len: usize, span: Span) -> Expr {
+    let strslice_ty = get_strslice_vir_ty();
+    let fun_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(fun, Arc::new(vec![])),
+        Arc::new(vec![]),
+    );
+
+    let spanned_fun_call =
+        Arc::new(SpannedTyped { span: span.clone(), x: fun_call, typ: strslice_ty });
+    let view_ty = get_view_vir_ty();
+    let view_fun = get_view_vir_fun();
+
+    let view_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(view_fun, Arc::new(vec![])),
+        Arc::new(vec![spanned_fun_call.clone()]),
+    );
+
+    let spanned_view_call = Arc::new(SpannedTyped { span: span.clone(), x: view_call, typ: view_ty });
+
+    let len_ty = get_len_vir_ty();
+    let len_fun = get_len_vir_fun();
+
+    let len_call = crate::ast::ExprX::Call(
+        crate::ast::CallTarget::Static(len_fun, avec![Arc::new(TypX::Int(IntRange::U(8)))]), 
+        avec![spanned_view_call]
+    );
+
+
+    let spanned_len_call = Arc::new(SpannedTyped {span: span.clone(), x: len_call, typ: len_ty });
+    let expr = poly_closed_expr(ctx, &spanned_len_call);
+
+    let exp = crate::ast_to_sst::expr_to_exp(ctx, &HashMap::new(), &avec![], &expr)
+        .expect("internal compiler error");
+    let expr = exp_to_expr(ctx, &exp, &ExprCtxt { mode: ExprMode::Spec, is_bit_vector: false, bit_vector_typ_hint: None }).expect("internal compiler error");
+    
+    let len_val = Arc::new(ExprX::Const(Constant::Nat(Arc::new(len.to_string()))));
+    Arc::new(ExprX::Binary(BinaryOp::Eq, expr, len_val))
+}
+
+fn expr_with_str_fuel(fun_ident: Ident, expr: Expr) -> Expr {
+    let var = Arc::new(ExprX::Var(fun_ident));
+    let apply = Arc::new(ExprX::Apply(Arc::new("str_reveal_bool".to_string()), avec![var]));
+    let expr_binop = ExprX::Binary(BinaryOp::Implies, apply, expr);
+    Arc::new(expr_binop)
+}
+
+fn declare_str_fuel_const(fun: Fun) -> (Ident, Decl) {
+    let varname = crate::def::prefix_str(&path_to_air_ident(&fun.path));
+    let ty = air::ast::TypX::Named(Arc::new("StrLitId".to_string()));
+    let ty = Arc::new(ty);
+    let exp = Arc::new(DeclX::Const(varname.clone(), ty));
+    (varname, exp)
+}
+
+fn string_to_air(
+    ctx: &Ctx,
+    fun: Fun,
+    string: &String,
+    span: Span,
+) -> (Arc<Vec<CommandsWithContext>>, Vec<(Span, SnapPos)>) {
+
+    let and = |exprs: Vec<Expr>| -> Expr {
+        let exprs = Arc::new(exprs);
+        let exprx = ExprX::Multi(MultiOp::And, exprs);
+        Arc::new(exprx)
+    };
+
+    let mut commands = Vec::new();
+
+
+    let (str_ident, decl) = declare_str_fuel_const(fun.clone());
+    commands.push(Arc::new(CommandX::Global(decl)));
+
+    let mut exps = Vec::new();
+    let ascii_exp = string_is_ascii_to_air(ctx, fun.clone(), string, span.clone(), &mut commands);
+    let len_exp = string_len_to_air(ctx, fun.clone(), string.len(), span.clone());
+    exps.push(len_exp);
+    exps.push(ascii_exp);
+
+    for (index, c) in string.chars().into_iter().enumerate() {
+        let digit_value = c as u8;
+        let exp = string_index_to_air(ctx, fun.clone(), index, digit_value, span.clone(), &mut commands);
+        exps.push(exp);
+    }
+
+
+    let exp = and(exps);
+    let exp = expr_with_str_fuel(str_ident, exp);
+
+    let command = Arc::new(CommandX::Global(Arc::new(DeclX::Axiom(exp))));
+    commands.push(command);
+
+    (
+        Arc::new(vec![Arc::new(CommandsWithContextX {
+            commands: Arc::new(commands),
+            desc: "StrSlice".to_string(),
+            span,
+            prover_choice: crate::def::ProverChoice::DefaultProver,
+        })]),
+        vec![],
+    )
 }

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use vir::ast::{Expr, InferMode, Mode, Pattern, Typ};
 
+#[derive(Debug)]
 pub struct ErasureInfo {
     pub(crate) resolved_calls: Vec<(SpanData, ResolvedCall)>,
     pub(crate) resolved_exprs: Vec<(SpanData, Expr)>,
