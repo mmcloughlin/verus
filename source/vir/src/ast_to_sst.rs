@@ -1434,8 +1434,6 @@ fn expr_to_stm_opt(
             // since actual VC is added in `sst_to_air.rs`
             //
             if !ctx.checking_recommends() && ctx.expand_flag {
-                println!("split inv");
-                println!("len: {}", invs.len());
                 let mut split_invs: Vec<Exp> = vec![];
                 for e in invs.iter() {
                     if crate::split_expression::need_split_expression(ctx, &e.span) {
@@ -1452,10 +1450,8 @@ fn expr_to_stm_opt(
                             0,
                         );
                         if splitted_exprs.is_ok() {
-                            println!("split ok");
                             let splitted_exprs = splitted_exprs.unwrap();
                             for exp in &**splitted_exprs {
-                                println!("splitted {}", exp.e);
                                 split_invs.push(exp.e.clone());
                             }
                         }
@@ -1463,7 +1459,6 @@ fn expr_to_stm_opt(
                     split_invs.push(e.clone());
                 }
                 invs = split_invs;
-                println!("len after split: {}", invs.len());
             }
 
             if ctx.checking_recommends() {

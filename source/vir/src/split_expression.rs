@@ -111,6 +111,14 @@ fn subsitute_argument(
     Ok(result)
 }
 
+fn is_bool_type(t: &Typ) -> bool {
+    match &**t {
+        TypX::Bool => true,
+        TypX::Boxed(b) => is_bool_type(b),
+        _ => false,
+    }
+}
+
 fn is_same_type(t1: &Typ, t2: &Typ) -> bool {
     match (&**t1, &**t2) {
         (TypX::Bool, TypX::Bool)
@@ -182,6 +190,8 @@ fn tr_inline_function(
         fun_to_inline.span.clone(),
         "Note: this function is inside a foriegn module".to_string(),
     ));
+    let type_err = Err((fun_to_inline.span.clone(), "Note: this function body is not inlined since it is not bool type".to_string()));
+
     let mut found_local_fuel = false;
     let fuel = match state.find_fuel(&fun_to_inline.x.name) {
         Some(local_fuel) => {
@@ -237,6 +247,11 @@ fn tr_inline_function(
                 return closed_err;
             }
         };
+
+        if !is_bool_type(&body.typ) {
+            return type_err;
+        }
+
         let params = &fun_to_inline.x.params;
         let body_exp = pure_ast_expression_to_sst(ctx, body, params);
 
@@ -304,6 +319,7 @@ pub(crate) fn split_expr(
     match *exp.e.typ {
         TypX::Bool => (),
         _ => {
+            panic!(); 
             return Err((exp.e.span.clone(), "cannot split non boolean expression".to_string()));
         }
     }

@@ -741,6 +741,7 @@ pub fn func_def_to_air(
                             0,
                         );
                         if splitted_exprs.is_ok() {
+                            dbg!("split ok");
                             let splitted_exprs = splitted_exprs.unwrap();
                             small_ens_assertions.extend(
                                 crate::split_expression::register_splitted_assertions(
