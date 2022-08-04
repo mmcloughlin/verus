@@ -303,7 +303,9 @@ pub(crate) fn split_expr(
 ) -> Result<TracedExps, (Span, String)> {
     match *exp.e.typ {
         TypX::Bool => (),
-        _ => return Err((exp.e.span.clone(), "cannot split non boolean expression".to_string())),
+        _ => {
+            return Err((exp.e.span.clone(), "cannot split non boolean expression".to_string()));
+        }
     }
     match &exp.e.x {
         ExpX::Unary(UnaryOp::Not, e1) => {
@@ -392,6 +394,7 @@ pub(crate) fn split_expr(
         ExpX::Call(fun_name, _typs, exps) => {
             let fun = get_function(ctx, &exp.e.span, fun_name).unwrap();
             let res_inlined_exp = tr_inline_function(ctx, state, fun, exps, &exp.e.span);
+
             match res_inlined_exp {
                 Ok(inlined_exp) => {
                     let new_trace = if level > 0 {
@@ -406,7 +409,6 @@ pub(crate) fn split_expr(
                 }
                 Err((sp, msg)) => {
                     // if the function inlining failed, treat as atom
-                    println!("not inlined: {}", exp.e);
                     let not_inlined_exp = TracedExpX::new(
                         exp.e.clone(),
                         exp.e.clone(),
@@ -442,6 +444,13 @@ pub(crate) fn split_expr(
             return Ok(merge_two_es(es1, es2));
         }
         ExpX::UnaryOpr(uop, e1) => {
+            match uop {
+                crate::ast::UnaryOpr::Box(_) | crate::ast::UnaryOpr::Unbox(_) => (),
+                crate::ast::UnaryOpr::HasType(_)
+                | crate::ast::UnaryOpr::IsVariant { .. }
+                | crate::ast::UnaryOpr::TupleField { .. }
+                | crate::ast::UnaryOpr::Field(_) => return Ok(mk_atom(exp.clone(), negated)),
+            }
             let es1 = split_expr(
                 ctx,
                 state,
