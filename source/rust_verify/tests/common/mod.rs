@@ -204,7 +204,9 @@ macro_rules! test_verify_one_file {
     ($(#[$attrs:meta])* $name:ident $body:expr => $result:pat) => {
         $(#[$attrs])*
         fn $name() {
+            println!("{}",$body);
             let result = verify_one_file($body);
+            println!("{:?}", result);
             #[allow(irrefutable_let_patterns)]
             if let $result = result {
             } else {

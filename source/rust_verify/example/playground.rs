@@ -10,7 +10,7 @@ verus! {
     const PARTIAL_GREETING: StrSlice<'static> = new_strlit("Hello", true);
     const OTHER_GREETING: StrSlice<'static> = new_strlit("Hello World!", true);
 
-    fn string_lit<'a>() {
+    fn string_lit1<'a>() {
         GREETING.reveal();
         PARTIAL_GREETING.reveal();
 
@@ -19,17 +19,20 @@ verus! {
         let part = GREETING.substring(0, 5);
         assert(part.view().ext_equal(PARTIAL_GREETING.view()));
         assert(part.view() === PARTIAL_GREETING.view());
+        let val:u8 = GREETING.get_char(0);
+        assert(val === 72);
     }
 
-    // fn str_1<'a>(s1: StrSlice<'a>, s2: StrSlice<'a>)
-    //     requires
-    //         s1.view() === s2.view(),
-    //         s1.view().len() == 10,
-    // {
-    //     let a1 = s1.substring(3, 5);
-    //     let a2 = s2.substring(3, 5);
-    //     assert(a1.view() === a2.view());
-    // }
+    fn str_1<'a>(s1: StrSlice<'a>, s2: StrSlice<'a>)
+        requires
+            s1.view() === s2.view(),
+            s1.view().len() === 10,
+    {
+        let a1 = s1.substring(3, 5);
+        let a2 = s2.substring(3, 5);
+        assert(a1.view() === a2.view());
+    }
+
 }
 
 fn main() {}

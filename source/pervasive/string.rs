@@ -46,7 +46,7 @@ impl<'a> StrSlice<'a> {
         requires i < self.view().len()
         ensures
             self.is_ascii() ==> (
-                self.view().index(i) == c &&
+                self.view().index(i as int) == c &&
                 c < 128
             )
     {
@@ -59,7 +59,7 @@ impl<'a> StrSlice<'a> {
             from < self.view().len(),
             to <= self.view().len(),
         ensures
-            ret.view() === self.view().subrange(from, to)
+            ret.view() === self.view().subrange(from as int, to as int)
     {
         StrSlice {
             inner: &self.inner[from..to],
