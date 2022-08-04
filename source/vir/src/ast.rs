@@ -234,6 +234,13 @@ pub enum MultiOp {
     Chained(Arc<Vec<InequalityOp>>),
 }
 
+#[derive(Clone, Debug)]
+pub enum StrOp {
+    Len(Expr),
+    IsAscii(Expr),
+    GetChar { strslice: Expr, index: Expr },
+}
+
 /// Ghost annotations on functions and while loops; must appear at the beginning of function body
 /// or while loop body
 pub type HeaderExpr = Arc<HeaderExprX>;
@@ -393,6 +400,8 @@ pub enum ExprX {
     Binary(BinaryOp, Expr, Expr),
     /// Primitive multi-operand operation
     Multi(MultiOp, Exprs),
+    /// Primitive string slice operations
+    Str(StrOp),
     /// Quantifier (forall/exists), binding the variables in Binders, with body Expr
     Quant(Quant, Binders<Typ>, Expr),
     /// Specification closure

@@ -495,6 +495,10 @@ fn fn_call_to_vir<'tcx>(
     let is_tracked_split_tuple = f_name.starts_with("builtin::tracked_split_tuple");
     let is_new_strlit = tcx.is_diagnostic_item(Symbol::intern("pervasive::string::new_strlit"), f);
     let is_strslice_reveal = tcx.is_diagnostic_item(Symbol::intern("pervasive::string::StrSlice::reveal"), f);
+    let is_strslice_len = tcx.is_diagnostic_item(Symbol::intern("builtin::strslice_len"), f);
+    let is_strslice_get_char = tcx.is_diagnostic_item(Symbol::intern("builtin::strslice_get_char"), f);
+    let is_strslice_is_ascii = tcx.is_diagnostic_item(Symbol::intern("builtin::strslice_is_ascii"), f);
+
     let is_spec = is_admit
         || is_no_method_body
         || is_requires
@@ -924,6 +928,10 @@ fn fn_call_to_vir<'tcx>(
             },
             _ => panic!("Expected a method call for StrSlice::reveal with one argument but did not receive it")
         };
+    }
+
+    if is_strslice_get_char {
+
     }
 
     let mut vir_args = args

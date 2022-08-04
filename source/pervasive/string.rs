@@ -67,4 +67,25 @@ impl<'a> StrSlice<'a> {
     }
 }
 
+#[verifier(external_body)]
+#[verifier(broadcast_forall)]
+pub proof fn axiom_str_literal_is_ascii<'a>(s: StrSlice<'a>)
+    ensures
+        #[trigger] s.is_ascii() === builtin::strslice_is_ascii(s),
+{ }
+
+#[verifier(external_body)]
+#[verifier(broadcast_forall)]
+pub proof fn axiom_str_literal_len<'a>(s: StrSlice<'a>)
+    ensures
+        #[trigger] s.view().len() === builtin::strslice_len(s),
+{ }
+
+#[verifier(external_body)]
+#[verifier(broadcast_forall)]
+pub proof fn axiom_str_literal_get_char<'a>(s: StrSlice<'a>, i: int)
+    ensures
+        #[trigger] s.view().index(i) === builtin::strslice_get_char(s, i),
+{ }
+
 }
