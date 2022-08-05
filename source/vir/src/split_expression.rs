@@ -307,8 +307,8 @@ fn merge_two_es(es1: TracedExps, es2: TracedExps) -> TracedExps {
     return Arc::new(merged_vec);
 }
 
-// Note: this splitting referenced Dafny
-// https://github.com/dafny-lang/dafny/blob/cf285b9282499c46eb24f05c7ecc7c72423cd878/Source/Dafny/Verifier/Translator.cs#L11100
+// Note: this splitting referenced Dafny - https://github.com/dafny-lang/dafny/blob/cf285b9282499c46eb24f05c7ecc7c72423cd878/Source/Dafny/Verifier/Translator.cs#L11100
+// `split_expr` should be called after `finalize_exp` to ensure that triggers are already selected
 pub(crate) fn split_expr(
     ctx: &Ctx,
     state: &State,
@@ -319,7 +319,7 @@ pub(crate) fn split_expr(
     match *exp.e.typ {
         TypX::Bool => (),
         _ => {
-            panic!(); 
+            panic!("internal error: attempt to split non-boolean expression"); 
             return Err((exp.e.span.clone(), "cannot split non boolean expression".to_string()));
         }
     }
@@ -345,6 +345,8 @@ pub(crate) fn split_expr(
                         false,
                         level,
                     )?;
+                    // REVIEW: A && B to     [A,B]
+                    //            change to: [A, A=>B]
                     return Ok(merge_two_es(es1, es2));
                 }
                 // apply DeMorgan's Law
@@ -486,10 +488,22 @@ pub(crate) fn split_expr(
         }
         ExpX::Bind(bnd, e1) => {
             let new_bnd = match &bnd.x {
-                BndX::Let(..)
-                | BndX::Quant(Quant { quant: air::ast::Quant::Forall, boxed_params: _ }, _, _)
+                BndX::Let(..) if !negated => bnd.clone(),
+                BndX::Quant(Quant { quant: air::ast::Quant::Forall, boxed_params: _ }, _, trigs)
                     if !negated =>
                 {
+                    // since the trigger selection happens AFTER the AST->SST translation, 
+                    // ininling spec functions can make "Could not automatically infer triggers" error.
+                    // However, for proving `forall` clause, triggers does not matter. (triggers are needed for using `forall` as hypothesis)
+                    // therefore, 
+
+
+
+                    // for trig in &**trigs {
+                    //     for t in &**trig {
+                    //         println!("trigger: {}", t);
+                    //     }
+                    // }
                     bnd.clone()
                 }
                 // REVIEW: is this actually useful?
