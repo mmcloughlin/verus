@@ -696,63 +696,35 @@ fn stm_call(
     let fun = get_function(ctx, span, &name)?;
     let mut stms: Vec<Stm> = Vec::new();
     if ctx.expand_flag && crate::split_expression::need_split_expression(ctx, span) {
-        if name.path.segments[0].to_string() == "pervasive".to_string()
-            && name.path.segments[1].to_string() == "assert".to_string()
-        {
-            // take the boolean argument, and split this expressino into pieces.
-            // then push all these as extra assertions
-            // original span needed for later use -- to check if this additional assertion produces additional info
-            let error = air::errors::error(crate::def::SPLIT_ASSERT_FAILURE, span);
+        // we are spliting the `requires` expression on the call site.
+        // If we split the `requires` expression on the function itself,
+        // this splitted encoding will take effect on every call site, which is not desirable.
+        //
+        // Also, note that prevasive::assert is consisted of `requires` and `ensures`.
+        // therefore, we are also splitting pervaisve::assert here
+        let params = &fun.x.params;
+        for e in &**fun.x.require {
+            let exp = crate::split_expression::pure_ast_expression_to_sst(ctx, e, params);
+            let arg_exps = Arc::new(vec_map(&args, |x| x.0.clone()));
+            let exp_subsituted =
+                crate::split_expression::tr_inline_expression(&exp, params, &arg_exps);
+            if exp_subsituted.is_err() {
+                continue;
+            }
+            let exp_subsituted = exp_subsituted.unwrap();
+            let error = air::errors::error(crate::def::SPLIT_PRE_FAILURE.to_string(), span);
             let exprs = crate::split_expression::split_expr(
                 ctx,
                 state,
                 &crate::split_expression::TracedExpX::new(
-                    args[0].0.clone(),
-                    args[0].0.clone(),
+                    exp_subsituted.clone(),
+                    exp_subsituted.clone(),
                     error.clone(),
                 ),
                 false,
-                0,
+                1, // to display inlined exp of requires with original context
             );
-            if exprs.is_ok() {
-                let exprs = exprs.unwrap();
-                stms.extend(
-                    crate::split_expression::register_splitted_assertions(exprs).into_iter(),
-                );
-            }
-        } else {
-            // we are spliting the `requires` expression on the call site.
-            // If we split the `requires` expression on the function itself,
-            // this splitted encoding will take effect on every call site, which is not desirable.
-            let params = &fun.x.params;
-            for e in &**fun.x.require {
-                let exp = crate::split_expression::pure_ast_expression_to_sst(ctx, e, params);
-                let arg_exps = Arc::new(vec_map(&args, |x| x.0.clone()));
-                let exp_subsituted =
-                    crate::split_expression::tr_inline_expression(&exp, params, &arg_exps);
-                if exp_subsituted.is_err() {
-                    continue;
-                }
-                let exp_subsituted = exp_subsituted.unwrap();
-                let error = air::errors::error(crate::def::SPLIT_PRE_FAILURE.to_string(), span);
-                let exprs = crate::split_expression::split_expr(
-                    ctx,
-                    state,
-                    &crate::split_expression::TracedExpX::new(
-                        exp_subsituted.clone(),
-                        exp_subsituted.clone(),
-                        error.clone(),
-                    ),
-                    false,
-                    1, // to display inlined exp of requires with original context
-                );
-                if exprs.is_ok() {
-                    let exprs = exprs.unwrap();
-                    stms.extend(
-                        crate::split_expression::register_splitted_assertions(exprs).into_iter(),
-                    );
-                }
-            }
+            stms.extend(crate::split_expression::register_splitted_assertions(exprs).into_iter());
         }
     }
 
@@ -1433,33 +1405,33 @@ fn expr_to_stm_opt(
             // however, it is hard to register `Assert` with tailored error messages as in `requires` `assert` `ensures`
             // since actual VC is added in `sst_to_air.rs`
             //
-            if !ctx.checking_recommends() && ctx.expand_flag {
-                let mut split_invs: Vec<Exp> = vec![];
-                for e in invs.iter() {
-                    if crate::split_expression::need_split_expression(ctx, &e.span) {
-                        let error = air::errors::error(crate::def::SPLIT_INV_FAILURE, &e.span);
-                        let splitted_exprs = crate::split_expression::split_expr(
-                            ctx,
-                            &state, // use the state after `body` translation to get the fuel info
-                            &crate::split_expression::TracedExpX::new(
-                                e.clone(),
-                                e.clone(),
-                                error.clone(),
-                            ),
-                            false,
-                            0,
-                        );
-                        if splitted_exprs.is_ok() {
-                            let splitted_exprs = splitted_exprs.unwrap();
-                            for exp in &**splitted_exprs {
-                                split_invs.push(exp.e.clone());
-                            }
-                        }
-                    }
-                    split_invs.push(e.clone());
-                }
-                invs = split_invs;
-            }
+            // if !ctx.checking_recommends() && ctx.expand_flag {
+            //     let mut split_invs: Vec<Exp> = vec![];
+            //     for e in invs.iter() {
+            //         if crate::split_expression::need_split_expression(ctx, &e.span) {
+            //             let error = air::errors::error(crate::def::SPLIT_INV_FAILURE, &e.span);
+            //             let splitted_exprs = crate::split_expression::split_expr(
+            //                 ctx,
+            //                 &state, // use the state after `body` translation to get the fuel info
+            //                 &crate::split_expression::TracedExpX::new(
+            //                     e.clone(),
+            //                     e.clone(),
+            //                     error.clone(),
+            //                 ),
+            //                 false,
+            //                 0,
+            //             );
+            //             if splitted_exprs.is_ok() {
+            //                 let splitted_exprs = splitted_exprs.unwrap();
+            //                 for exp in &**splitted_exprs {
+            //                     split_invs.push(exp.e.clone());
+            //                 }
+            //             }
+            //         }
+            //         split_invs.push(e.clone());
+            //     }
+            //     invs = split_invs;
+            // }
 
             if ctx.checking_recommends() {
                 let check_recommends: Vec<Stm> = check_recommends.into_iter().flatten().collect();
