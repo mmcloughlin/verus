@@ -190,7 +190,10 @@ fn tr_inline_function(
         fun_to_inline.span.clone(),
         "Note: this function is inside a foriegn module".to_string(),
     ));
-    let type_err = Err((fun_to_inline.span.clone(), "Note: this function body is not inlined since it is not bool type".to_string()));
+    let type_err = Err((
+        fun_to_inline.span.clone(),
+        "Note: this function body is not inlined since it is not bool type".to_string(),
+    ));
 
     let mut found_local_fuel = false;
     let fuel = match state.find_fuel(&fun_to_inline.x.name) {
@@ -307,6 +310,28 @@ fn merge_two_es(es1: TracedExps, es2: TracedExps) -> TracedExps {
     return Arc::new(merged_vec);
 }
 
+// use span of e2 -- e1 is just for precondition
+fn mk_imply_traced(e1: &Exp, e2: &TracedExp) -> TracedExp {
+    let imply = ExpX::Binary(BinaryOp::Implies, e1.clone(), e2.e.clone());
+    let imply_exp = SpannedTyped::new(&e2.e.span, &Arc::new(TypX::Bool), imply);
+    TracedExpX::new(imply_exp, e2.e_display.clone(), e2.trace.clone())
+}
+
+fn mk_chained_implies(es: TracedExps) -> TracedExps {
+    let mut chained_vec = vec![];
+    let mut chained_e = es.first().unwrap().clone();
+    // REVIEW: change encoding order ---- (A => B) => C to A => (B => C )
+    for (idx, e) in es.iter().enumerate() {
+        if idx == 0 {
+            chained_vec.push(chained_e.clone());
+        } else {
+            chained_e = mk_imply_traced(&chained_e.e, e);
+            chained_vec.push(chained_e.clone());
+        }
+    }
+    Arc::new(chained_vec)
+}
+
 // Note: this splitting referenced Dafny - https://github.com/dafny-lang/dafny/blob/cf285b9282499c46eb24f05c7ecc7c72423cd878/Source/Dafny/Verifier/Translator.cs#L11100
 // `split_expr` should be called after `finalize_exp` to ensure that triggers are already selected
 pub(crate) fn split_expr(
@@ -319,7 +344,7 @@ pub(crate) fn split_expr(
     match *exp.e.typ {
         TypX::Bool => (),
         _ => {
-            panic!("internal error: attempt to split non-boolean expression"); 
+            panic!("internal error: attempt to split non-boolean expression");
             return Err((exp.e.span.clone(), "cannot split non boolean expression".to_string()));
         }
     }
@@ -345,12 +370,14 @@ pub(crate) fn split_expr(
                         false,
                         level,
                     )?;
-                    // REVIEW: A && B to     [A,B]
-                    //            change to: [A, A=>B]
+                    // instead of `A && B` to [A,B], use [A, A=>B]
+                    let es1 = mk_chained_implies(es1);
+                    let es2 = mk_chained_implies(es2);
+                    let es2 = Arc::new(es2.iter().map(|e| mk_imply_traced(e1, e)).collect());
                     return Ok(merge_two_es(es1, es2));
                 }
-                // apply DeMorgan's Law
                 BinaryOp::Or if negated => {
+                    // apply DeMorgan's Law
                     let es1 = split_expr(
                         ctx,
                         state,
@@ -365,6 +392,16 @@ pub(crate) fn split_expr(
                         true,
                         level,
                     )?;
+                    // now `Or` is changed to `And`
+                    // instead of `A && B` to [A,B], use [A, A=>B]
+                    let es1 = mk_chained_implies(es1);
+                    let es2 = mk_chained_implies(es2);
+                    let e1 = SpannedTyped::new(
+                        &e1.span,
+                        &Arc::new(TypX::Bool),
+                        ExpX::Unary(UnaryOp::Not, e1.clone()),
+                    ); // negate e1
+                    let es2 = Arc::new(es2.iter().map(|e| mk_imply_traced(&e1, e)).collect());
                     return Ok(merge_two_es(es1, es2));
                 }
                 // split rhs (e.g.  A => (B && C)  to  (A => B) && (A => C) )
@@ -489,15 +526,15 @@ pub(crate) fn split_expr(
         ExpX::Bind(bnd, e1) => {
             let new_bnd = match &bnd.x {
                 BndX::Let(..) if !negated => bnd.clone(),
-                BndX::Quant(Quant { quant: air::ast::Quant::Forall, boxed_params: _ }, _, trigs)
-                    if !negated =>
-                {
-                    // since the trigger selection happens AFTER the AST->SST translation, 
+                BndX::Quant(
+                    Quant { quant: air::ast::Quant::Forall, boxed_params: _ },
+                    _,
+                    trigs,
+                ) if !negated => {
+                    // since the trigger selection happens AFTER the AST->SST translation,
                     // ininling spec functions can make "Could not automatically infer triggers" error.
                     // However, for proving `forall` clause, triggers does not matter. (triggers are needed for using `forall` as hypothesis)
-                    // therefore, 
-
-
+                    // therefore,
 
                     // for trig in &**trigs {
                     //     for t in &**trig {
