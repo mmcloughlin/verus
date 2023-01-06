@@ -461,6 +461,16 @@ RwLock {
         }
     }
 
+    transition!{
+        abandon_exc_pending() {
+            // TODO(travis): wanted to use a bunch of _'s in my pattern here, but couldn't.
+            //remove exc_state -= Some(let ExcState::Pending{_, _, _, _});
+            remove exc_state -= Some(let ExcState::Pending{bucket, visited_count, clean, value});
+            require bucket.is_None();
+            update flag = Flag::Available;
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -1224,6 +1234,15 @@ RwLock {
                 assert(pre.count_all_refs(bucket) === post.count_all_refs(bucket)); // trigger
             }
         }
+        // shared_storage_invariant
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+    }
+
+    #[inductive(abandon_exc_pending)]
+    fn abandon_exc_pending_inductive(pre: Self, post: Self) {
+        Self::ref_count_invariant_lemma(pre, post);
         // shared_storage_invariant
         assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
             assert(pre.shared_state_valid(ss));
