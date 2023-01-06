@@ -364,7 +364,26 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
 
             let ret = mid_ty_to_vir_ghost(tcx, sig.output().skip_binder(), allow_mut_ref).0;
             let id = def.as_local().unwrap().local_def_index.index();
-            (Arc::new(TypX::AnonymousClosure(args, ret, id)), false)
+            (Arc::new(TypX::AnonymousClosure(args, ret, Some(id))), false)
+        }
+        TyKind::FnDef(def, substs) => {
+            let sig = substs.sig();
+            let args: Vec<Typ> = sig
+                .inputs()
+                .skip_binder()
+                .iter()
+                .map(|t| mid_ty_to_vir_ghost(tcx, t, allow_mut_ref).0)
+                .collect();
+            assert!(args.len() == 1);
+            let args = match &*args[0] {
+                TypX::Tuple(typs) => typs.clone(),
+                _ => panic!("expected tuple type"),
+            };
+
+            let ret = mid_ty_to_vir_ghost(tcx, sig.output().skip_binder(), allow_mut_ref).0;
+            let id = def.as_local().unwrap().local_def_index.index();
+            (Arc::new(TypX::AnonymousClosure(args, ret, Some(id))), false)
+
         }
         TyKind::Char => (Arc::new(TypX::Char), false),
         _ => {

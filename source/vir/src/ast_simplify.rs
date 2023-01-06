@@ -27,7 +27,7 @@ struct State {
     // Name of a datatype to represent each tuple arity
     tuple_typs: HashMap<usize, Path>,
     // Name of a datatype to represent each tuple arity
-    closure_typs: HashMap<usize, Path>,
+    closure_typs: HashMap<Option<usize>, Path>,
 }
 
 impl State {
@@ -51,7 +51,7 @@ impl State {
         self.tuple_typs[&arity].clone()
     }
 
-    fn closure_type_name(&mut self, id: usize) -> Path {
+    fn closure_type_name(&mut self, id: Option<usize>) -> Path {
         if !self.closure_typs.contains_key(&id) {
             self.closure_typs.insert(id, crate::def::prefix_closure_type(id));
         }

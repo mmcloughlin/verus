@@ -309,8 +309,15 @@ pub fn prefix_tuple_type(i: usize) -> Path {
     Arc::new(PathX { krate: None, segments: Arc::new(vec![ident]) })
 }
 
-pub fn prefix_closure_type(i: usize) -> Path {
-    let ident = Arc::new(format!("{}{}", PREFIX_CLOSURE_TYPE, i));
+pub fn prefix_closure_type(i: Option<usize>) -> Path {
+    let ident = match i {
+        Some(i) => {
+            Arc::new(format!("{}{}", PREFIX_CLOSURE_TYPE, i))
+        }
+        None => {
+            Arc::new(format!("{}fn", PREFIX_CLOSURE_TYPE))
+        }
+    };
     Arc::new(PathX { krate: None, segments: Arc::new(vec![ident]) })
 }
 
