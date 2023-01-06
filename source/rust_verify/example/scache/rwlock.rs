@@ -479,6 +479,15 @@ RwLock {
         }
     }
 
+    transition!{
+        mark_dirty() {
+            remove exc_state -= Some(let ExcState::Obtained{bucket, clean});
+            require clean;
+            update flag = Flag::ExcLockDirty;
+            add exc_state += Some(ExcState::Obtained{bucket, clean: false});
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -1259,6 +1268,15 @@ RwLock {
 
     #[inductive(deposit_abandon_load_pending)]
     fn deposit_abandon_load_pending_inductive(pre: Self, post: Self, value: StoredType) {
+        Self::ref_count_invariant_lemma(pre, post);
+        // shared_storage_invariant
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+    }
+
+    #[inductive(mark_dirty)]
+    fn mark_dirty_inductive(pre: Self, post: Self) {
         Self::ref_count_invariant_lemma(pre, post);
         // shared_storage_invariant
         assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
