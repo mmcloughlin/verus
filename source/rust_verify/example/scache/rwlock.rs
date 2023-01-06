@@ -451,6 +451,16 @@ RwLock {
         }
     }
 
+    transition!{
+        deposit_unmap2(value: StoredType) {
+            remove exc_state -= Some(let ExcState::Obtained{bucket, clean});
+            require bucket.is_Some();
+            update flag = Flag::Unmapped;
+            deposit storage += Some(value);
+            add shared_state += { SharedState::Pending{bucket: bucket.get_Some_0()} };
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -1190,6 +1200,30 @@ RwLock {
     #[inductive(deposit_unmap)]
     fn deposit_unmap_inductive(pre: Self, post: Self, value: StoredType) {
         Self::ref_count_invariant_lemma(pre, post);
+        // shared_storage_invariant
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+    }
+
+    #[inductive(deposit_unmap2)]
+    fn deposit_unmap2_inductive(pre: Self, post: Self, value: StoredType) {
+        let changed_bucket = pre.exc_state.get_Some_0().get_Obtained_bucket().get_Some_0();
+        let new_ss = SharedState::Pending{bucket: changed_bucket};
+        assert forall |bucket: BucketId| bucket < RC_WIDTH
+            implies post.ref_counts[bucket] === post.count_all_refs(bucket) by {
+            if bucket === changed_bucket {
+                assert_multisets_equal!(Self::filter_shared_refs(post.shared_state, bucket),
+                    Self::filter_shared_refs(pre.shared_state, bucket).insert(new_ss));
+                // TODO(chris): weird that I need this trigger twice, once in each branch.
+                // Daaaaaafny wouldn't have made me do that.
+                assert(pre.count_all_refs(bucket) === post.count_all_refs(bucket)); // trigger
+            } else {
+                assert_multisets_equal!(Self::filter_shared_refs(post.shared_state, bucket),
+                    Self::filter_shared_refs(pre.shared_state, bucket));
+                assert(pre.count_all_refs(bucket) === post.count_all_refs(bucket)); // trigger
+            }
+        }
         // shared_storage_invariant
         assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
             assert(pre.shared_state_valid(ss));
