@@ -311,35 +311,39 @@ RwLock {
     }
 
     // TODO(travis): error: unable to prove inherent safety condition: the given value to be withdrawn must be stored before the withdraw
-//    transition!{
-//        load_pending_to_exc(clean: bool, stored_garbage: StoredType) {
-//            remove loading_state -= Some(let LoadingState::PendingCounted{bucket});
-//            add exc_state += Some(ExcState::Obtained{bucket, clean});
-//            update flag = if clean { Flag::ExcLockClean } else { Flag::ExcLockDirty };
-//            // disk load routine will replace stored garbage with disk contents, but that's what's
-//            // there now, so we have to maintain the lock invariant connecting ghost value to real.
-//            withdraw storage -= Some(stored_garbage); 
-//        }
-//    }
+    transition!{
+        load_pending_to_exc(clean: bool) {
+            remove loading_state -= Some(let LoadingState::PendingCounted{bucket});
+            add exc_state += Some(ExcState::Obtained{bucket, clean});
+            update flag = if clean { Flag::ExcLockClean } else { Flag::ExcLockDirty };
+            // disk load routine will replace stored garbage with disk contents, but that's what's
+            // there now, so we have to maintain the lock invariant connecting ghost value to real.
+        }
+    }
 
     // a read-only transition that explains that having a shared references functions as a guard to
     // read the storage.
-//    property!{
-//        borrow_shared_obtained(ss: SharedState) {
-//            require ss.is_Obtained();
-//            have shared_state >= { ss };
-//            // TODO(travis): error: unable to prove inherent safety condition: the value being guarded must be stored
-//            guard storage >= Some(ss.get_Obtained_value());
-//        }
-//    }
+    property!{
+        borrow_shared_obtained(ss: SharedState) {
+            require ss.is_Obtained();
+            have shared_state >= { ss };
+            // TODO(travis): error: unable to prove inherent safety condition: the value being guarded must be stored
+            // ...why is this proof done inline, vs the inductiveness proofs demanded as separate
+            // marked lemmas?
+            guard storage >= Some(ss.get_Obtained_value()) by {
+                assert(pre.shared_state_valid(ss)); // trigger
+//                assert(pre.storage === Some(ss.get_Obtained_value()));
+            };
+        }
+    }
 
-//    property!{
-//        borrow_writeback() {
-//            // TODO(travis): "unreachable pattern"
-//            have writeback_state >= Some(let WritebackState{value});
-//            guard storage >= Some(value);
-//        }
-//    }
+    property!{
+        borrow_writeback() {
+            // TODO(travis): fix warning "unreachable pattern"
+            have writeback_state >= Some(let WritebackState{value});
+            guard storage >= Some(value);
+        }
+    }
 
     transition!{
         obtain_loading_no_refcount() {
@@ -485,6 +489,16 @@ RwLock {
             require clean;
             update flag = Flag::ExcLockDirty;
             add exc_state += Some(ExcState::Obtained{bucket, clean: false});
+        }
+    }
+
+    transition!{
+        claim_to_shared() {
+            remove exc_state -= Some(let ExcState::Claim{bucket, value});
+            require bucket.is_Some();
+
+            update flag = if pre.flag === Flag::WritebackAndClaimed { Flag::Writeback } else { Flag::Available};
+            add shared_state += { SharedState::Obtained{bucket: bucket.get_Some_0(), value} };
         }
     }
 
@@ -966,23 +980,23 @@ RwLock {
         }
     }
     
-//    #[inductive(load_pending_to_exc)]
-//    fn load_pending_to_exc_inductive(pre: Self, post: Self, clean: bool, stored_garbage: StoredType) {
-//        Self::ref_count_invariant_lemma(pre, post);
-//        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
-//            assert(pre.shared_state_valid(ss));
-//        }
-////        let withdrawn = {
-////            ||| (post.exc_state.is_Some() && post.exc_state.get_Some_0().is_Obtained())
-////            ||| post.loading_state.is_Some()
-////        };
-////        assert(post.exc_state.is_Some() && post.exc_state.get_Some_0().is_Obtained());
-//////        assert(!withdrawn);
-//////        assert(post.storage === Some(stored_garbage));
-//////        assert(post.storage.is_Some());
-//////        assert(post.storage.is_Some() == !withdrawn);
-////        assert(post.storage_some_invariant());
-//    }
+    #[inductive(load_pending_to_exc)]
+    fn load_pending_to_exc_inductive(pre: Self, post: Self, clean: bool) {
+        Self::ref_count_invariant_lemma(pre, post);
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+//        let withdrawn = {
+//            ||| (post.exc_state.is_Some() && post.exc_state.get_Some_0().is_Obtained())
+//            ||| post.loading_state.is_Some()
+//        };
+//        assert(post.exc_state.is_Some() && post.exc_state.get_Some_0().is_Obtained());
+////        assert(!withdrawn);
+////        assert(post.storage === Some(stored_garbage));
+////        assert(post.storage.is_Some());
+////        assert(post.storage.is_Some() == !withdrawn);
+//        assert(post.storage_some_invariant());
+    }
     
     #[inductive(obtain_loading_no_refcount)]
     fn obtain_loading_no_refcount_inductive(pre: Self, post: Self) {
@@ -1278,6 +1292,32 @@ RwLock {
     #[inductive(mark_dirty)]
     fn mark_dirty_inductive(pre: Self, post: Self) {
         Self::ref_count_invariant_lemma(pre, post);
+        // shared_storage_invariant
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+    }
+
+    // TODO(jonh/travis): can we refactor these common proofs more? Soooo much repetition.
+    #[inductive(claim_to_shared)]
+    fn claim_to_shared_inductive(pre: Self, post: Self) {
+        let changed_bucket = pre.exc_state.get_Some_0().get_Claim_bucket().get_Some_0();
+        let value = pre.exc_state.get_Some_0().get_Claim_value();
+        let new_ss = SharedState::Obtained{bucket: changed_bucket, value};
+        assert forall |bucket: BucketId| bucket < RC_WIDTH
+            implies post.ref_counts[bucket] === post.count_all_refs(bucket) by {
+            if bucket === changed_bucket {
+                assert_multisets_equal!(Self::filter_shared_refs(post.shared_state, bucket),
+                    Self::filter_shared_refs(pre.shared_state, bucket).insert(new_ss));
+                // TODO(chris): weird that I need this trigger twice, once in each branch.
+                // Daaaaaafny wouldn't have made me do that.
+                assert(pre.count_all_refs(bucket) === post.count_all_refs(bucket)); // trigger
+            } else {
+                assert_multisets_equal!(Self::filter_shared_refs(post.shared_state, bucket),
+                    Self::filter_shared_refs(pre.shared_state, bucket));
+                assert(pre.count_all_refs(bucket) === post.count_all_refs(bucket)); // trigger
+            }
+        }
         // shared_storage_invariant
         assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
             assert(pre.shared_state_valid(ss));
