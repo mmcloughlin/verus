@@ -471,6 +471,14 @@ RwLock {
         }
     }
 
+    transition!{
+        deposit_abandon_load_pending(value: StoredType) {
+            remove loading_state -= Some(let LoadingState::Pending{});
+            update flag = Flag::Unmapped;
+            deposit storage += Some(value);
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -1242,6 +1250,15 @@ RwLock {
 
     #[inductive(abandon_exc_pending)]
     fn abandon_exc_pending_inductive(pre: Self, post: Self) {
+        Self::ref_count_invariant_lemma(pre, post);
+        // shared_storage_invariant
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+    }
+
+    #[inductive(deposit_abandon_load_pending)]
+    fn deposit_abandon_load_pending_inductive(pre: Self, post: Self, value: StoredType) {
         Self::ref_count_invariant_lemma(pre, post);
         // shared_storage_invariant
         assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
