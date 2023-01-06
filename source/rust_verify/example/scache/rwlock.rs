@@ -442,6 +442,15 @@ RwLock {
         }
     }
 
+    transition!{
+        deposit_unmap(value: StoredType) {
+            remove exc_state -= Some(let ExcState::Obtained{bucket, clean});
+            require bucket.is_None();
+            update flag = Flag::Unmapped;
+            deposit storage += Some(value);
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -1178,6 +1187,14 @@ RwLock {
         }
     }
     
+    #[inductive(deposit_unmap)]
+    fn deposit_unmap_inductive(pre: Self, post: Self, value: StoredType) {
+        Self::ref_count_invariant_lemma(pre, post);
+        // shared_storage_invariant
+        assert forall |ss| post.shared_state.count(ss) > 0 implies post.shared_state_valid(ss) by {
+            assert(pre.shared_state_valid(ss));
+        }
+    }
 }
 
 } //tokenized_state_machine
