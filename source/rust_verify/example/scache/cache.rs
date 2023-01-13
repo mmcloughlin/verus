@@ -227,8 +227,16 @@ Cache {
     //////////////////////////////////////////////////////////////////////
     #[inductive(start_read)]
     fn start_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
-        assert(pre.entries.contains_key(cache_idx));
-        assert(post.entries.contains_key(cache_idx));
+        assert forall |disk_idx| {
+            &&& self.disk_idx_to_cache_idx.contains_key(disk_idx)
+            &&& self.disk_idx_to_cache_idx[disk_idx].is_Some()
+        } implies {
+            let cache_idx = self.disk_idx_to_cache_idx[disk_idx].get_Some_0();
+            &&& self.entries.contains_key(cache_idx)
+            &&& self.entries[cache_idx] !== Entry::Empty
+            &&& self.entries[cache_idx].get_disk_idx() === disk_idx
+        } by {
+        }
     }
 }
 
