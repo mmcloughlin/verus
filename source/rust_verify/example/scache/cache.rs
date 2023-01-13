@@ -47,14 +47,34 @@ pub struct SyncReq(Set<DiskIdx>);
 
 pub enum Status { Clean, Dirty, Writeback }
 
+#[is_variant]
 pub enum Entry {
     Empty,
     Reading{disk_idx: DiskIdx},
     Entry{disk_idx: DiskIdx, data: Block}
 }
 
+impl Entry {
+    pub  open spec fn get_disk_idx(self) -> DiskIdx
+        recommends self !== Entry::Empty
+    {
+        match self {
+            Entry::Empty => DiskIdx(0),
+            Entry::Reading{disk_idx} => disk_idx,
+            Entry::Entry{disk_idx, ..} => disk_idx,
+        }
+    }
+}
+
 pub spec const MAX_DISK_PAGES:nat = 0xffff_ffff_ffff_ffff;
 pub spec const MAX_CACHE_SIZE:nat = 0xffff_ffff;
+
+// TODO: move to map_v.rs
+impl<K, V> Map<K, V> {
+    pub open spec fn contains_key(self, key: K) -> bool {
+        self.dom().contains(key)
+    }
+}
 
 } // verus
 
@@ -110,6 +130,105 @@ Cache {
             init sync_reqs = Map::empty();
             init havocs = Map::empty();
         }
+    }
+
+    transition!{
+        start_read(cache_idx: CacheIdx, disk_idx: DiskIdx) {
+            remove entries -= [ cache_idx => Entry::Empty ];
+            remove disk_idx_to_cache_idx -= [ disk_idx => None ];
+            add entries += [ cache_idx => Entry::Reading{disk_idx} ];
+            add disk_idx_to_cache_idx += [ disk_idx => Some(cache_idx) ];
+            add read_reqs += set {disk_idx};
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////////////
+    // invariants
+    //////////////////////////////////////////////////////////////////////////////
+
+    #[invariant]
+    pub spec fn cache_index_consistency_invariant(&self) -> bool {
+        forall |cache_idx| {
+            &&& self.entries.contains_key(cache_idx)
+            &&& self.entries[cache_idx] !== Entry::Empty
+        } ==> {
+            &&& self.disk_idx_to_cache_idx.contains_key(self.entries[cache_idx].get_disk_idx())
+            &&& self.disk_idx_to_cache_idx[self.entries[cache_idx].get_disk_idx()] === Some(cache_idx)
+        }
+    }
+
+    #[invariant]
+    pub spec fn disk_index_consistency_invariant(&self) -> bool {
+        forall |disk_idx| {
+            &&& self.disk_idx_to_cache_idx.contains_key(disk_idx)
+            &&& self.disk_idx_to_cache_idx[disk_idx].is_Some()
+        } ==> {
+            let cache_idx = self.disk_idx_to_cache_idx[disk_idx].get_Some_0();
+            &&& self.entries.contains_key(cache_idx)
+            &&& self.entries[cache_idx] !== Entry::Empty
+            &&& self.entries[cache_idx].get_disk_idx() === disk_idx
+        }
+    }
+
+    #[invariant]
+    pub spec fn disjoint_io_invariant(&self) -> bool {
+        &&& self.read_reqs.disjoint(self.read_resps.dom())
+        &&& self.write_reqs.dom().disjoint(self.write_resps)
+    }
+
+    #[invariant]
+    pub spec fn read_io_invariant(&self) -> bool {
+        forall |disk_idx| {
+            &&& self.read_reqs.contains(disk_idx) || self.read_resps.contains_key(disk_idx)
+        } ==> {
+            &&& self.disk_idx_to_cache_idx.contains_key(disk_idx)
+            &&& self.disk_idx_to_cache_idx[disk_idx].is_Some()
+            &&& self.entries[self.disk_idx_to_cache_idx[disk_idx].get_Some_0()].is_Reading()
+        }
+    }
+
+    #[invariant]
+    pub spec fn write_io_invariant(&self) -> bool {
+        forall |disk_idx| {
+            &&& self.write_reqs.contains_key(disk_idx) || self.write_resps.contains(disk_idx)
+        } ==> {
+            let cache_idx = self.disk_idx_to_cache_idx[disk_idx].get_Some_0();
+            &&& self.disk_idx_to_cache_idx.contains_key(disk_idx)
+            &&& self.disk_idx_to_cache_idx[disk_idx].is_Some()
+            &&& self.statuses.contains_key(cache_idx)
+            &&& self.statuses[cache_idx] === Status::Writeback
+        }
+    }
+
+    #[invariant]
+    pub spec fn statuses_invariant(&self) -> bool {
+        forall |cache_idx| {
+            &&& self.entries.contains_key(cache_idx)
+            &&& self.entries[cache_idx].is_Entry()
+        } <==> {
+            self.statuses.contains_key(cache_idx)
+        }
+    }
+
+    #[invariant]
+    pub spec fn disjoint_tickets_invariant(&self) -> bool {
+        self.tickets.dom().disjoint(self.stubs.dom())
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // init inductiveness proofs
+    //////////////////////////////////////////////////////////////////////
+    #[inductive(initialize)]
+    fn initialize_inductive(post: Self) {
+    }
+       
+    //////////////////////////////////////////////////////////////////////
+    // transition inductiveness proofs
+    //////////////////////////////////////////////////////////////////////
+    #[inductive(start_read)]
+    fn start_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
+        assert(pre.entries.contains_key(cache_idx));
+        assert(post.entries.contains_key(cache_idx));
     }
 }
 
