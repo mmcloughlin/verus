@@ -159,7 +159,8 @@ Cache {
 
     #[invariant]
     pub spec fn disk_index_consistency_invariant(&self) -> bool {
-        forall |disk_idx| {
+        forall |disk_idx|
+        {
             &&& self.disk_idx_to_cache_idx.contains_key(disk_idx)
             &&& self.disk_idx_to_cache_idx[disk_idx].is_Some()
         } ==> {
@@ -227,15 +228,20 @@ Cache {
     //////////////////////////////////////////////////////////////////////
     #[inductive(start_read)]
     fn start_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
-        assert forall |disk_idx| {
-            &&& self.disk_idx_to_cache_idx.contains_key(disk_idx)
-            &&& self.disk_idx_to_cache_idx[disk_idx].is_Some()
+        assert forall |di|
+            // A truckload of boilerplate...
+        {
+            &&& post.disk_idx_to_cache_idx.contains_key(di)
+            &&& post.disk_idx_to_cache_idx[di].is_Some()
         } implies {
-            let cache_idx = self.disk_idx_to_cache_idx[disk_idx].get_Some_0();
-            &&& self.entries.contains_key(cache_idx)
-            &&& self.entries[cache_idx] !== Entry::Empty
-            &&& self.entries[cache_idx].get_disk_idx() === disk_idx
+            let cache_idx = post.disk_idx_to_cache_idx[di].get_Some_0();
+            &&& post.entries.contains_key(cache_idx)
+            &&& post.entries[cache_idx] !== Entry::Empty
+            &&& post.entries[cache_idx].get_disk_idx() === di
         } by {
+            if disk_idx !== di {
+                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+            }
         }
     }
 }
