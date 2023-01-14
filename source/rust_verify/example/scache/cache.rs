@@ -171,6 +171,16 @@ Cache {
         }
     }
 
+//    transition!{
+//        evict(cache_idx: CacheIdx) {
+//            remove statuses -= [ cache_idx => Status::Clean ];
+//            remove entries -= [ cache_idx => let Entry::Entry{disk_idx, data} ];
+//            remove disk_idx_to_cache_idx -= [ disk_idx => let _ ];
+//            add entries += [ cache_idx => Entry::Empty ];
+//            add disk_idx_to_cache_idx += [ disk_idx => None ];
+//        }
+//    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -340,6 +350,10 @@ Cache {
         }
     }
 
+//    #[inductive(evict)]
+//    fn evict_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
+//        assume(false);
+//    }
 }
 
 } //tokenized_state_machine
