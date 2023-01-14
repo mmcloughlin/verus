@@ -142,6 +142,35 @@ Cache {
         }
     }
 
+    transition!{
+        finish_read(cache_idx: CacheIdx, disk_idx: DiskIdx) {
+            remove entries -= [ cache_idx => Entry::Reading{disk_idx} ];
+            remove read_resps -= [ disk_idx => let data ];
+            add entries += [ cache_idx => Entry::Entry{disk_idx, data} ];
+            add statuses += [ cache_idx => Status::Clean ];
+        }
+    }
+
+    transition!{
+        start_writeback(cache_idx: CacheIdx) {
+            remove statuses -= [ cache_idx => Status::Dirty ];
+            have entries >= [ cache_idx => let Entry::Entry{disk_idx, data} ];
+            
+            add statuses += [ cache_idx => Status::Writeback ];
+            add write_reqs += [ disk_idx => data ];
+        }
+    }
+
+//    transition!{
+//        finish_writeback(cache_idx: CacheIdx) {
+//            remove statuses -= [ cache_idx => Status::Writeback ];
+//            have entries >= [ cache_idx => let Entry::Entry{disk_idx, data} ];
+//            remove write_resps -= set { disk_idx };
+//
+//            add statuses += [ cache_idx => Status::Clean ];
+//        }
+//    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -228,6 +257,7 @@ Cache {
     //////////////////////////////////////////////////////////////////////
     #[inductive(start_read)]
     fn start_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
+        // disk_index_consistency_invariant
         assert forall |di|
             // A truckload of boilerplate...
         {
@@ -241,9 +271,64 @@ Cache {
         } by {
             if disk_idx !== di {
                 assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+                // (Which Dafny gets for free.)
             }
         }
     }
+
+    #[inductive(finish_read)]
+    fn finish_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
+        // statuses_invariant
+        assert forall |ci| {
+            &&& post.entries.contains_key(ci)
+            &&& post.entries[ci].is_Entry()
+        } <==> {
+            post.statuses.contains_key(ci)
+        } by {
+            if ci !== cache_idx {
+                assert(pre.entries.contains_key(ci) || true);   // gratuitous trigger
+            }
+        }
+        // Dafny gets this proof with {}
+    }
+
+    #[inductive(start_writeback)]
+    fn start_writeback_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
+    }
+
+//    #[inductive(finish_writeback)]
+//    fn finish_writeback_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
+//        // disk_index_consistency_invariant
+//        let disk_idx = pre.entries[cache_idx].get_Entry_disk_idx();
+//        assert forall |di|
+//            // A truckload of boilerplate...
+//        {
+//            &&& post.disk_idx_to_cache_idx.contains_key(di)
+//            &&& post.disk_idx_to_cache_idx[di].is_Some()
+//        } implies {
+//            let ci = post.disk_idx_to_cache_idx[di].get_Some_0();
+//            &&& post.entries.contains_key(ci)
+//            &&& post.entries[ci] !== Entry::Empty
+//            &&& post.entries[ci].get_disk_idx() === di
+//        } by {
+//            if disk_idx !== di {
+//                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+//            }
+//        }
+//
+//        // statuses_invariant
+//        assert forall |ci| {
+//            &&& post.entries.contains_key(ci)
+//            &&& post.entries[ci].is_Entry()
+//        } <==> {
+//            post.statuses.contains_key(ci)
+//        } by {
+//            if ci !== cache_idx {
+//                assert(pre.entries.contains_key(ci) || true);   // gratuitous trigger
+//            }
+//        }
+//    }
+
 }
 
 } //tokenized_state_machine
