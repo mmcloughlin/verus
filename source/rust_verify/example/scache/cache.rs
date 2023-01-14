@@ -294,6 +294,17 @@ Cache {
 
     #[inductive(start_writeback)]
     fn start_writeback_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
+        // statuses_invariant
+        assert forall |ci| {
+            &&& post.entries.contains_key(ci)
+            &&& post.entries[ci].is_Entry()
+        } <==> {
+            post.statuses.contains_key(ci)
+        } by {
+            if ci !== cache_idx {
+                assert(pre.entries.contains_key(ci) || true);   // gratuitous trigger
+            }
+        }
     }
 
     #[inductive(finish_writeback)]
