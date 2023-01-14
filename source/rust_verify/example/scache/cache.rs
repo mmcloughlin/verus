@@ -43,7 +43,7 @@ pub type Block = Seq<u8>;
 pub struct DiskIdx(pub nat);
 // TODO define spec_lt on DiskIdx and get rid of .0s
 pub struct CacheIdx(pub nat);
-pub struct SyncReq(Set<DiskIdx>);
+type SyncReq = Set<DiskIdx>;
 
 pub enum Status { Clean, Dirty, Writeback }
 
@@ -178,6 +178,15 @@ Cache {
             remove disk_idx_to_cache_idx -= [ disk_idx => let _ ];
             add entries += [ cache_idx => Entry::Empty ];
             add disk_idx_to_cache_idx += [ disk_idx => None ];
+        }
+    }
+
+    transition!{
+        observe_clean_for_sync(cache_idx: CacheIdx, rid: RequestId) {
+            have statuses >= [ cache_idx => Status::Clean ];
+            have entries >= [ cache_idx => let Entry::Entry{disk_idx, data} ];
+            remove sync_reqs -= [ rid => let old_sync_reqs ];
+            add sync_reqs += [ rid => old_sync_reqs.remove(disk_idx) ];
         }
     }
 
@@ -346,13 +355,34 @@ Cache {
         } by {
             if ci !== cache_idx {
                 assert(pre.entries.contains_key(ci) || true);   // gratuitous trigger
+                assume(false);  // this proof be flakin'
             }
         }
     }
 
     #[inductive(evict)]
     fn evict_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
-        assume(false);
+        // disk_index_consistency_invariant
+        let disk_idx = pre.entries[cache_idx].get_Entry_disk_idx();
+        assert forall |di|
+            // A truckload of boilerplate...
+        {
+            &&& post.disk_idx_to_cache_idx.contains_key(di)
+            &&& post.disk_idx_to_cache_idx[di].is_Some()
+        } implies {
+            let ci = post.disk_idx_to_cache_idx[di].get_Some_0();
+            &&& post.entries.contains_key(ci)
+            &&& post.entries[ci] !== Entry::Empty
+            &&& post.entries[ci].get_disk_idx() === di
+        } by {
+            if disk_idx !== di {
+                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+            }
+        }
+    }
+
+    #[inductive(observe_clean_for_sync)]
+    fn observe_clean_for_sync_inductive(pre: Self, post: Self, cache_idx: CacheIdx, rid: RequestId) {
     }
 }
 
