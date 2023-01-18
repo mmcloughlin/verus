@@ -233,6 +233,20 @@ Cache {
         }
     }
 
+    transition!{
+        havoc_evict(cache_idx: CacheIdx, rid: RequestId) {
+            remove statuses -= [ cache_idx => let status ];
+            require status !== Status::Writeback;
+            have havocs >= [ rid => let disk_idx ];
+            remove entries -= [ cache_idx => let Entry::Entry{disk_idx: entry_disk_idx, data} ];
+            require disk_idx === entry_disk_idx;
+            remove disk_idx_to_cache_idx -= [ disk_idx => let ignore_ ];
+
+            add entries += [ cache_idx => Entry::Empty ];
+            add disk_idx_to_cache_idx += [ disk_idx => None ];
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -450,7 +464,6 @@ Cache {
     #[inductive(havoc_new)]
     fn havoc_new_inductive(pre: Self, post: Self, cache_idx: CacheIdx, rid: RequestId, data: Block) {
         // disk_index_consistency_invariant
-        //let disk_idx = pre.entries[cache_idx].get_Entry_disk_idx();
         let disk_idx = pre.havocs[rid];
         assert forall |di|
             // A truckload of boilerplate...
@@ -468,6 +481,7 @@ Cache {
             }
         }
 
+        // statuses_invariant
         assert forall |ci| post.statuses.contains_key(ci)
             implies {
                 &&& post.entries.contains_key(ci)
@@ -479,6 +493,37 @@ Cache {
         }
     }
     
+    #[inductive(havoc_evict)]
+    fn havoc_evict_inductive(pre: Self, post: Self, cache_idx: CacheIdx, rid: RequestId) {
+        // disk_index_consistency_invariant
+        let disk_idx = pre.havocs[rid];
+        assert forall |di|
+            // A truckload of boilerplate...
+        {
+            &&& post.disk_idx_to_cache_idx.contains_key(di)
+            &&& post.disk_idx_to_cache_idx[di].is_Some()
+        } implies {
+            let ci = post.disk_idx_to_cache_idx[di].get_Some_0();
+            &&& post.entries.contains_key(ci)
+            &&& post.entries[ci] !== Entry::Empty
+            &&& post.entries[ci].get_disk_idx() === di
+        } by {
+            if disk_idx !== di {
+                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+            }
+        }
+
+        // statuses_invariant
+        assert forall |ci| post.statuses.contains_key(ci)
+            implies {
+                &&& post.entries.contains_key(ci)
+                &&& post.entries[ci].is_Entry()
+            }  by {
+            if ci!==cache_idx {
+                assert( pre.statuses.contains_key(ci) );
+            }
+        }
+    }
     
 }
 
