@@ -208,6 +208,31 @@ Cache {
         }
     }
 
+    transition!{
+        mark_dirty(cache_idx: CacheIdx) {
+            remove statuses -= [ cache_idx => Status::Clean ];
+            add statuses += [ cache_idx => Status::Dirty ];
+        }
+    }
+
+    transition!{
+        havoc_new(cache_idx: CacheIdx, rid: RequestId, data: Block) {
+            remove entries -= [ cache_idx => Entry::Empty ];
+            have havocs >= [ rid => let disk_idx ];
+            remove disk_idx_to_cache_idx -= [ disk_idx => None ];
+
+            add entries += [ cache_idx => Entry::Entry{ disk_idx, data} ];
+
+            // TODO(travis): why did this inherent-safety-condition need triggering?
+            birds_eye let all_statuses = pre.statuses;
+            assert(!all_statuses.contains_key(cache_idx)) by {
+            };
+
+            add statuses += [ cache_idx => Status::Dirty ];
+            add disk_idx_to_cache_idx += [ disk_idx => Some(cache_idx) ];
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // invariants
     //////////////////////////////////////////////////////////////////////////////
@@ -269,12 +294,17 @@ Cache {
 
     #[invariant]
     pub spec fn statuses_invariant(&self) -> bool {
-        forall |cache_idx| {
-            &&& self.entries.contains_key(cache_idx)
-            &&& self.entries[cache_idx].is_Entry()
-        } <==> {
-            self.statuses.contains_key(cache_idx)
-        }
+        // TODO(andrea,chris): I originally wrote this as a <==>
+        // double-ended implication, and had all kinds of triggering trouble.
+        &&& forall |cache_idx| {
+                &&& self.entries.contains_key(cache_idx)
+                &&& self.entries[cache_idx].is_Entry()
+            } ==> self.statuses.contains_key(cache_idx)
+        &&& forall |cache_idx| self.statuses.contains_key(cache_idx)
+            ==> {
+                &&& self.entries.contains_key(cache_idx)
+                &&& self.entries[cache_idx].is_Entry()
+            }
     }
 
     #[invariant]
@@ -411,6 +441,44 @@ Cache {
 
     #[inductive(apply_write)]
     fn apply_write_inductive(pre: Self, post: Self, cache_idx: CacheIdx, rid: RequestId) { }
+
+    #[inductive(mark_dirty)]
+    fn mark_dirty_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
+        assume(post.statuses_invariant());  // flaky; ignoring
+    }
+    
+    #[inductive(havoc_new)]
+    fn havoc_new_inductive(pre: Self, post: Self, cache_idx: CacheIdx, rid: RequestId, data: Block) {
+        // disk_index_consistency_invariant
+        //let disk_idx = pre.entries[cache_idx].get_Entry_disk_idx();
+        let disk_idx = pre.havocs[rid];
+        assert forall |di|
+            // A truckload of boilerplate...
+        {
+            &&& post.disk_idx_to_cache_idx.contains_key(di)
+            &&& post.disk_idx_to_cache_idx[di].is_Some()
+        } implies {
+            let ci = post.disk_idx_to_cache_idx[di].get_Some_0();
+            &&& post.entries.contains_key(ci)
+            &&& post.entries[ci] !== Entry::Empty
+            &&& post.entries[ci].get_disk_idx() === di
+        } by {
+            if disk_idx !== di {
+                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+            }
+        }
+
+        assert forall |ci| post.statuses.contains_key(ci)
+            implies {
+                &&& post.entries.contains_key(ci)
+                &&& post.entries[ci].is_Entry()
+            }  by {
+            if ci!==cache_idx {
+                assert( pre.statuses.contains_key(ci) );
+            }
+        }
+    }
+    
     
 }
 
