@@ -360,7 +360,6 @@ Cache {
     #[inductive(finish_read)]
     fn finish_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
         // statuses_invariant
-        assume(post.statuses_invariant());  // flaky; ignoring
         assert forall |ci| {
             &&& post.entries.contains_key(ci)
             &&& post.entries[ci].is_Entry()
@@ -418,7 +417,6 @@ Cache {
         } by {
             if ci !== cache_idx {
                 assert(pre.entries.contains_key(ci) || true);   // gratuitous trigger
-                assume(false);  // this proof be flakin'
             }
         }
     }
@@ -442,7 +440,17 @@ Cache {
                 assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
             }
         }
-        assume(post.statuses_invariant());  // flaky; ignoring
+
+        // statuses_invariant
+        assert forall |ci| post.statuses.contains_key(ci)
+            implies {
+                &&& post.entries.contains_key(ci)
+                &&& post.entries[ci].is_Entry()
+            }  by {
+            if ci!==cache_idx {
+                assert( pre.statuses.contains_key(ci) );
+            }
+        }
     }
 
     #[inductive(observe_clean_for_sync)]
@@ -458,7 +466,6 @@ Cache {
 
     #[inductive(mark_dirty)]
     fn mark_dirty_inductive(pre: Self, post: Self, cache_idx: CacheIdx) {
-        assume(post.statuses_invariant());  // flaky; ignoring
     }
     
     #[inductive(havoc_new)]
