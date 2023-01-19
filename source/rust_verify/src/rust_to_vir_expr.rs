@@ -1118,8 +1118,15 @@ fn fn_call_to_vir<'tcx>(
         .iter()
         .zip(inputs)
         .map(|(arg, param)| {
-            // TODO don't need to compute the whole type here
-            let (is_mut_ref_param, _typ) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, param);
+            let is_mut_ref_param = if is_ghost_borrow_mut || is_tracked_borrow_mut {
+                // REVIEW awkward code path, but we might be able to get
+                // rid of the *_borrow_mut functions if we continue this route
+                false
+            } else {
+                // TODO don't need to compute the whole type here
+                let (m, _ty) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, param);
+                m
+            };
 
             if is_mut_ref_param {
                 let tracked_opt = get_expr_tracked(bctx, &arg);
