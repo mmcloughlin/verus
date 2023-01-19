@@ -853,11 +853,14 @@ fn fn_call_to_vir<'tcx>(
         return Ok(mk_expr(ExprX::WithTriggers { triggers, body }));
     }
     if is_old {
+        // handle old(param.view()) where param has type Tracked<&mut T>
+        let tracked_arg_opt = get_expr_tracked_view_call(bctx, &args[0]);
+        let arg = tracked_arg_opt.unwrap_or(&args[0]);
         if let ExprKind::Path(QPath::Resolved(None, rustc_hir::Path { res: Res::Local(id), .. })) =
-            &args[0].kind
+            &arg.kind
         {
             if let Node::Binding(pat) = tcx.hir().get(*id) {
-                let typ = typ_of_node_expect_mut_ref(bctx, &expr.hir_id, args[0].span)?;
+                let typ = typ_of_node_expect_mut_ref(bctx, &expr.hir_id, arg.span)?;
                 return Ok(spanned_typed_new(
                     expr.span,
                     &typ,
@@ -2903,6 +2906,28 @@ fn get_expr_tracked<'tcx>(
         },
         _ => None,
     }
+}
+
+fn get_expr_tracked_view_call<'tcx>(
+    bctx: &BodyCtxt<'tcx>,
+    expr: &Expr<'tcx>,
+) -> Option<&'tcx Expr<'tcx>> {
+    match &expr.kind {
+        ExprKind::MethodCall(_name_and_generics, _call_span_0, args, _fn_span)
+            if args.len() == 1 =>
+        {
+            let fn_def_id = bctx
+                .types
+                .type_dependent_def_id(expr.hir_id)
+                .expect("def id of the method definition");
+            let f_name = bctx.ctxt.tcx.def_path_str(fn_def_id);
+            if f_name == "builtin::Tracked::<A>::view" {
+                return Some(&args[0]);
+            }
+        }
+        _ => {}
+    }
+    None
 }
 
 fn tracked_fun_name() -> vir::ast::Fun {
