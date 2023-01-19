@@ -441,7 +441,7 @@ impl<V> PPtr<V> {
         v
     }
 
-    verus!{
+    verus_old_todo_no_ghost_blocks!{
 
     /// Allocates heap memory for type `V`, leaving it initialized
     /// with the given value `v`.

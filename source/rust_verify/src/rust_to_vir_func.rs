@@ -3,7 +3,8 @@ use crate::attributes::{
 };
 use crate::context::{BodyCtxt, Context};
 use crate::rust_to_vir_base::{
-    check_generics_bounds_fun, def_id_to_vir_path, foreign_param_to_var, mid_ty_to_vir,
+    check_generics_bounds_fun, def_id_to_vir_path, foreign_param_to_var,
+    maybe_mutref_mid_ty_to_vir, mid_ty_to_vir,
 };
 use crate::rust_to_vir_expr::{expr_to_vir, pat_to_mut_var, ExprModifier};
 use crate::util::{err_span_str, err_span_string, spanned_new, unsupported_err_span};
@@ -224,17 +225,15 @@ pub(crate) fn check_item_fn<'tcx>(
 
         let name = Arc::new(name);
         let param_mode = get_var_mode(mode, ctxt.tcx.hir().attrs(*hir_id));
-        let is_mut = is_mut_ty(input);
-        if is_mut.is_some() && mode == Mode::Spec {
+
+        let (is_mut, typ) = maybe_mutref_mid_ty_to_vir(ctxt.tcx, input);
+
+        if is_mut && mode == Mode::Spec {
             return err_span_string(
                 *span,
                 format!("&mut argument not allowed for #[spec] functions"),
             );
         }
-
-        let typ = mid_ty_to_vir(ctxt.tcx, is_mut.unwrap_or(input), false);
-
-        let is_mut = is_mut.is_some();
 
         let vir_param = spanned_new(*span, ParamX { name, typ, mode: param_mode, is_mut });
         vir_params.push(vir_param);
@@ -392,13 +391,6 @@ pub(crate) fn check_item_fn<'tcx>(
     Ok(Some(name))
 }
 
-fn is_mut_ty<'tcx>(ty: rustc_middle::ty::Ty<'tcx>) -> Option<rustc_middle::ty::Ty<'tcx>> {
-    match ty.kind() {
-        rustc_middle::ty::TyKind::Ref(_, tys, rustc_ast::Mutability::Mut) => Some(tys),
-        _ => None,
-    }
-}
-
 pub(crate) fn check_item_const<'tcx>(
     ctxt: &Context<'tcx>,
     vir: &mut KrateX,
@@ -478,11 +470,11 @@ pub(crate) fn check_foreign_item_fn<'tcx>(
     assert!(idents.len() == inputs.len());
     for (param, input) in idents.iter().zip(inputs.iter()) {
         let name = Arc::new(foreign_param_to_var(param));
-        let is_mut = is_mut_ty(input);
-        let typ = mid_ty_to_vir(ctxt.tcx, is_mut.unwrap_or(input), false);
+
+        let (is_mut, typ) = maybe_mutref_mid_ty_to_vir(ctxt.tcx, input);
+
         // REVIEW: the parameters don't have attributes, so we use the overall mode
-        let vir_param =
-            spanned_new(param.span, ParamX { name, typ, mode, is_mut: is_mut.is_some() });
+        let vir_param = spanned_new(param.span, ParamX { name, typ, mode, is_mut });
         vir_params.push(vir_param);
     }
     let path = def_id_to_vir_path(ctxt.tcx, id);

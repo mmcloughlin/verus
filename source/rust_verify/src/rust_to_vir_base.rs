@@ -373,6 +373,51 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
     }
 }
 
+fn is_mut_ty<'tcx>(ty: rustc_middle::ty::Ty<'tcx>) -> Option<rustc_middle::ty::Ty<'tcx>> {
+    match ty.kind() {
+        rustc_middle::ty::TyKind::Ref(_, tys, rustc_ast::Mutability::Mut) => Some(tys),
+        _ => None,
+    }
+}
+
+// given a type `&mut T`, translated T and returns (true, translated type)
+// given a type without a mut ref, it returns (false, translated type)
+// Also handles Tracked<&mut T>
+pub(crate) fn maybe_mutref_mid_ty_to_vir<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    ty: rustc_middle::ty::Ty<'tcx>,
+) -> (bool, Typ) {
+    match ty.kind() {
+        TyKind::Adt(AdtDef { did, .. }, args) => {
+            let def_name = vir::ast_util::path_as_rust_name(&def_id_to_vir_path(tcx, *did));
+            if def_name == "builtin::Tracked" {
+                assert!(args.len() == 1);
+                match args[0].unpack() {
+                    rustc_middle::ty::subst::GenericArgKind::Type(t) => {
+                        return maybe_mutref_mid_ty_to_vir(tcx, t);
+                    }
+                    _ => {
+                        panic!("expected GenericArgKind::Type");
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let is_mut = is_mut_ty(ty);
+    match is_mut {
+        Some(inner_ty) => {
+            let typ = mid_ty_to_vir(tcx, inner_ty, false);
+            (true, typ)
+        }
+        None => {
+            let typ = mid_ty_to_vir(tcx, ty, false);
+            (false, typ)
+        }
+    }
+}
+
 pub(crate) fn mid_ty_to_vir<'tcx>(
     tcx: TyCtxt<'tcx>,
     ty: rustc_middle::ty::Ty<'tcx>,

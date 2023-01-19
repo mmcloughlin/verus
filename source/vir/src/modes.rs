@@ -385,6 +385,12 @@ fn check_expr_handle_mut_arg(
                     "cannot use tracked variable inside 'assert ... by' statements",
                 );
             }
+            if typing.check_ghost_blocks
+                && typing.block_ghostness == Ghost::Exec
+                && x_mode != Mode::Exec
+            {
+                return err_str(&expr.span, &format!("cannot use {x_mode} variable in exec-code"));
+            }
             let mode = if typing.check_ghost_blocks {
                 typing.block_ghostness.join_mode(mode)
             } else {
@@ -714,6 +720,15 @@ fn check_expr_handle_mut_arg(
                 );
             }
             let x_mode = get_var_loc_mode(typing, outer_mode, None, lhs, *init_not_mut)?;
+            if typing.check_ghost_blocks
+                && typing.block_ghostness == Ghost::Exec
+                && x_mode != Mode::Exec
+            {
+                return err_string(
+                    &expr.span,
+                    format!("cannot assign to {x_mode} variable in exec-code"),
+                );
+            }
             if !mode_le(outer_mode, x_mode) {
                 return err_string(
                     &expr.span,
@@ -1015,12 +1030,7 @@ fn check_stmt(
             } else {
                 *mode
             };
-            if typing.check_ghost_blocks
-                && typing.block_ghostness == Ghost::Exec
-                && mode != Mode::Exec
-            {
-                return err_str(&stmt.span, "exec code cannot declare non-exec variables");
-            }
+
             if !mode_le(outer_mode, mode) {
                 return err_string(&stmt.span, format!("pattern cannot have mode {}", mode));
             }

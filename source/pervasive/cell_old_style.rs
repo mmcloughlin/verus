@@ -230,7 +230,7 @@ impl<V> PCell<V> {
         self.take(&mut perm)
     }
 
-    verus!{
+    verus_old_todo_no_ghost_blocks!{
 
     #[inline(always)]
     pub fn new(v: V) -> (pt: (PCell<V>, Trk<PermData<V>>))
