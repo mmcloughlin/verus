@@ -892,7 +892,7 @@ fn expr_to_stm_opt(
             ))
         }
         ExprX::ConstVar(..) => panic!("ConstVar should already be removed"),
-        ExprX::Loc(expr1) => {
+        ExprX::Loc(expr1, _) => {
             let (stms, e0) = expr_to_stm_opt(ctx, state, expr1)?;
             let e0 = unwrap_or_return_never!(e0, stms);
             Ok((stms, ReturnValue::Some(mk_exp(ExpX::Loc(e0)))))

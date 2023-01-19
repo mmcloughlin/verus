@@ -378,10 +378,10 @@ fn poly_expr(ctx: &Ctx, state: &mut State, expr: &Expr) -> Expr {
                 }
             }
         }
-        ExprX::Loc(e) => {
+        ExprX::Loc(e, b) => {
             let expr = poly_expr(ctx, state, e);
             let typ = expr.typ.clone();
-            mk_expr_typ(&typ, ExprX::Loc(expr))
+            mk_expr_typ(&typ, ExprX::Loc(expr, *b))
         }
         ExprX::Binary(op, e1, e2) => {
             let e1 = poly_expr(ctx, state, e1);

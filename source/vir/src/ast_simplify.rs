@@ -70,7 +70,7 @@ fn is_small_expr(expr: &Expr) -> bool {
         ExprX::Const(_) | ExprX::Var(_) | ExprX::VarAt(..) => true,
         ExprX::Unary(UnaryOp::Not | UnaryOp::Clip { .. }, e) => is_small_expr(e),
         ExprX::UnaryOpr(UnaryOpr::Box(_) | UnaryOpr::Unbox(_), e) => is_small_expr(e),
-        ExprX::Loc(_) => panic!("expr is a location"),
+        ExprX::Loc(_, _) => panic!("expr is a location"),
         _ => false,
     }
 }

@@ -445,7 +445,7 @@ pub enum ExprX {
     /// Use of a const variable.  Note: ast_simplify replaces this with Call.
     ConstVar(Fun),
     /// Mutable reference (location)
-    Loc(Expr),
+    Loc(Expr, bool),
     /// Call to a function passing some expression arguments
     Call(CallTarget, Exprs),
     /// Note: ast_simplify replaces this with Ctor

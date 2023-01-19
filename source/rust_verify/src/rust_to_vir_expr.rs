@@ -5,10 +5,10 @@ use crate::attributes::{
 use crate::context::{BodyCtxt, Context};
 use crate::erase::ResolvedCall;
 use crate::rust_to_vir_base::{
-    def_id_to_vir_path, def_to_path_ident, get_function_def, get_range, hack_get_def_name,
-    is_smt_arith, is_smt_equality, is_type_std_rc_or_arc, local_to_var, mid_ty_simplify,
-    mid_ty_to_vir, mid_ty_to_vir_ghost, mk_range, typ_of_node, typ_of_node_expect_mut_ref,
-    typ_path_and_ident_to_vir_path,
+    def_id_to_vir_path, def_to_path_ident, get_range, hack_get_def_name, is_smt_arith,
+    is_smt_equality, is_type_std_rc_or_arc, local_to_var, maybe_mutref_mid_ty_to_vir,
+    mid_ty_simplify, mid_ty_to_vir, mid_ty_to_vir_ghost, mk_range, typ_of_node,
+    typ_of_node_expect_mut_ref, typ_path_and_ident_to_vir_path,
 };
 use crate::util::{
     err_span_str, err_span_string, slice_vec_map_result, spanned_new, spanned_typed_new,
@@ -1033,12 +1033,10 @@ fn fn_call_to_vir<'tcx>(
         return Ok(arg);
     }
 
-    let inputs: Box<dyn Iterator<Item = Option<_>>> = if let Some(f_local) = f.as_local() {
-        let f_hir_id = bctx.ctxt.tcx.hir().local_def_id_to_hir_id(f_local);
-        let inputs = get_function_def(bctx.ctxt.tcx, f_hir_id).0.decl.inputs;
-        Box::new(inputs.iter().map(Some).into_iter())
-    } else {
-        Box::new(std::iter::repeat(None))
+    let inputs = {
+        let fn_sig = bctx.ctxt.tcx.fn_sig(f);
+        let fn_sig = fn_sig.skip_binder();
+        fn_sig.inputs()
     };
 
     if is_new_strlit {
@@ -1120,18 +1118,15 @@ fn fn_call_to_vir<'tcx>(
         .iter()
         .zip(inputs)
         .map(|(arg, param)| {
-            let is_mut_ref_param = match param {
-                Some(rustc_hir::Ty {
-                    kind:
-                        rustc_hir::TyKind::Rptr(
-                            _,
-                            rustc_hir::MutTy { mutbl: rustc_hir::Mutability::Mut, .. },
-                        ),
-                    ..
-                }) => true,
-                _ => false,
-            };
+            // TODO don't need to compute the whole type here
+            let (is_mut_ref_param, _typ) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, param);
+
             if is_mut_ref_param {
+                let tracked_opt = get_expr_tracked(bctx, &arg);
+                let is_tracked = tracked_opt.is_some();
+
+                let arg = tracked_opt.unwrap_or(arg);
+
                 let arg_x = match &arg.kind {
                     ExprKind::AddrOf(BorrowKind::Ref, Mutability::Mut, e) => e,
                     _ => arg,
@@ -1141,7 +1136,7 @@ fn fn_call_to_vir<'tcx>(
                     _ => false,
                 };
                 let expr = expr_to_vir(bctx, arg_x, ExprModifier { addr_of: true, deref_mut })?;
-                Ok(spanned_typed_new(arg.span, &expr.typ.clone(), ExprX::Loc(expr)))
+                Ok(spanned_typed_new(arg.span, &expr.typ.clone(), ExprX::Loc(expr, is_tracked)))
             } else if is_decreases || is_invariant || is_invariant_ensures {
                 let bctx = &BodyCtxt { in_ghost: true, ..bctx.clone() };
                 expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, ExprModifier::REGULAR)?)
@@ -2868,5 +2863,29 @@ fn closure_to_vir<'tcx>(
         Ok(spanned_typed_new(closure_expr.span, &closure_vir_typ, exprx))
     } else {
         panic!("closure_to_vir expects ExprKind::Closure");
+    }
+}
+
+/// If expression is of the form tracked_exec(x), return Some(x)
+fn get_expr_tracked<'tcx>(bctx: &BodyCtxt<'tcx>, expr: &Expr<'tcx>) -> Option<&'tcx Expr<'tcx>> {
+    match &expr.kind {
+        ExprKind::Call(target, args) if args.len() == 1 => match &target.kind {
+            ExprKind::Path(qpath) => {
+                let def = bctx.types.qpath_res(&qpath, expr.hir_id);
+                match def {
+                    rustc_hir::def::Res::Def(_, def_id) => {
+                        let f_name = bctx.ctxt.tcx.def_path_str(def_id);
+                        if f_name == "pervasive::modes::tracked_exec" {
+                            Some(&args[0])
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+        _ => None,
     }
 }

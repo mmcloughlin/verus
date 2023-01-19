@@ -195,7 +195,7 @@ where
                 | ExprX::VarLoc(_)
                 | ExprX::VarAt(_, _)
                 | ExprX::ConstVar(..) => (),
-                ExprX::Loc(e) => {
+                ExprX::Loc(e, _) => {
                     expr_visitor_control_flow!(expr_visitor_dfs(e, map, mf));
                 }
                 ExprX::Call(target, es) => {
@@ -533,7 +533,7 @@ where
         ExprX::VarLoc(x) => ExprX::VarLoc(x.clone()),
         ExprX::VarAt(x, at) => ExprX::VarAt(x.clone(), at.clone()),
         ExprX::ConstVar(x) => ExprX::ConstVar(x.clone()),
-        ExprX::Loc(e) => ExprX::Loc(map_expr_visitor_env(e, map, env, fe, fs, ft)?),
+        ExprX::Loc(e, b) => ExprX::Loc(map_expr_visitor_env(e, map, env, fe, fs, ft)?, *b),
         ExprX::Call(target, es) => {
             let target = match target {
                 CallTarget::Static(x, typs) => {

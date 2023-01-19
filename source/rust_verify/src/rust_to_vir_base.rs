@@ -5,8 +5,7 @@ use crate::{unsupported, unsupported_err_unless};
 use rustc_ast::Mutability;
 use rustc_hir::definitions::DefPath;
 use rustc_hir::{
-    GenericParam, GenericParamKind, Generics, HirId, ItemKind, QPath, TraitFn, TraitItemKind, Ty,
-    Visibility, VisibilityKind,
+    GenericParam, GenericParamKind, Generics, HirId, QPath, Ty, Visibility, VisibilityKind,
 };
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::ty::GenericParamDefKind;
@@ -47,25 +46,6 @@ fn get_function_def_impl_item_node<'tcx>(
         }) => Some((fn_sig, body_id)),
         _ => None,
     }
-}
-
-pub(crate) fn get_function_def<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    hir_id: rustc_hir::HirId,
-) -> (&'tcx rustc_hir::FnSig<'tcx>, &'tcx rustc_hir::BodyId) {
-    get_function_def_impl_item_node(tcx, hir_id)
-        .or_else(|| match tcx.hir().get(hir_id) {
-            rustc_hir::Node::Item(item) => match &item.kind {
-                ItemKind::Fn(fn_sig, _, body_id) => Some((fn_sig, body_id)),
-                _ => None,
-            },
-            rustc_hir::Node::TraitItem(item) => match &item.kind {
-                TraitItemKind::Fn(fn_sig, TraitFn::Provided(body_id)) => Some((fn_sig, body_id)),
-                _ => None,
-            },
-            node => unsupported!("extern functions, or other function Node", node),
-        })
-        .expect("function expected")
 }
 
 pub(crate) fn typ_path_and_ident_to_vir_path<'tcx>(path: &Path, ident: vir::ast::Ident) -> Path {

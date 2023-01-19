@@ -109,7 +109,7 @@ fn check_one_expr(
                     }
                 }
                 let is_ok = match &arg.x {
-                    ExprX::Loc(l) => is_ok(l),
+                    ExprX::Loc(l, _) => is_ok(l),
                     _ => false,
                 };
                 if !is_ok {
