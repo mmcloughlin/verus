@@ -923,3 +923,45 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] tracked_type_allow_tracked_vars_in_exec_mode_if_not_used verus_code! {
+        struct X { }
+
+        #[verifier(external_body)]
+        proof fn get() -> (tracked x: X) {
+            unimplemented!();
+        }
+
+        proof fn destroy(tracked x: X) {
+        }
+
+        proof fn take_ref(tracked x: &X) {
+        }
+
+        proof fn take_mut(tracked x: &mut X) {
+        }
+
+        fn exec_take_ref(x: Tracked<&X>) {
+        }
+
+        fn exec_take_mut(x: Tracked<&mut X>) {
+        }
+
+        fn test_exec_mode_stuff() {
+            #[proof] let mut y;
+            proof { y = get(); }
+
+            exec_take_ref(tracked(&y));
+            exec_take_mut(tracked(&mut y));
+
+            proof {
+                take_ref(&y);
+                take_mut(&mut y);
+
+                destroy(y);
+            }
+
+        }
+    } => Ok(())
+}
