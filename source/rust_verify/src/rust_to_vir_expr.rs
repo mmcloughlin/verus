@@ -1125,7 +1125,12 @@ fn fn_call_to_vir<'tcx>(
                 let tracked_opt = get_expr_tracked(bctx, &arg);
                 let is_tracked = tracked_opt.is_some();
 
-                let arg = tracked_opt.unwrap_or(arg);
+                let arg = if let Some((inner_arg, fun_span)) = tracked_opt {
+                    record_fun(&bctx.ctxt, fun_span, &tracked_fun_name(), false, false);
+                    inner_arg
+                } else {
+                    arg
+                };
 
                 let arg_x = match &arg.kind {
                     ExprKind::AddrOf(BorrowKind::Ref, Mutability::Mut, e) => e,
@@ -2867,7 +2872,10 @@ fn closure_to_vir<'tcx>(
 }
 
 /// If expression is of the form tracked_exec(x), return Some(x)
-fn get_expr_tracked<'tcx>(bctx: &BodyCtxt<'tcx>, expr: &Expr<'tcx>) -> Option<&'tcx Expr<'tcx>> {
+fn get_expr_tracked<'tcx>(
+    bctx: &BodyCtxt<'tcx>,
+    expr: &Expr<'tcx>,
+) -> Option<(&'tcx Expr<'tcx>, Span)> {
     match &expr.kind {
         ExprKind::Call(target, args) if args.len() == 1 => match &target.kind {
             ExprKind::Path(qpath) => {
@@ -2876,7 +2884,7 @@ fn get_expr_tracked<'tcx>(bctx: &BodyCtxt<'tcx>, expr: &Expr<'tcx>) -> Option<&'
                     rustc_hir::def::Res::Def(_, def_id) => {
                         let f_name = bctx.ctxt.tcx.def_path_str(def_id);
                         if f_name == "pervasive::modes::tracked_exec" {
-                            Some(&args[0])
+                            Some((&args[0], target.span))
                         } else {
                             None
                         }
@@ -2888,4 +2896,18 @@ fn get_expr_tracked<'tcx>(bctx: &BodyCtxt<'tcx>, expr: &Expr<'tcx>) -> Option<&'
         },
         _ => None,
     }
+}
+
+fn tracked_fun_name() -> vir::ast::Fun {
+    Arc::new(FunX {
+        path: Arc::new(vir::ast::PathX {
+            krate: None,
+            segments: Arc::new(vec![
+                Arc::new("pervasive".to_string()),
+                Arc::new("modes".to_string()),
+                Arc::new("tracked_exec".to_string()),
+            ]),
+        }),
+        trait_path: None,
+    })
 }
