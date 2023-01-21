@@ -1121,15 +1121,12 @@ fn fn_call_to_vir<'tcx>(
         .iter()
         .zip(inputs)
         .map(|(arg, param)| {
-            let is_mut_ref_param = if is_ghost_borrow_mut || is_tracked_borrow_mut {
-                // REVIEW awkward code path, but we might be able to get
-                // rid of the *_borrow_mut functions if we continue this route
-                false
-            } else {
-                // TODO don't need to compute the whole type here
-                let (m, _ty) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, param);
-                m
-            };
+            if is_ghost_borrow_mut || is_tracked_borrow_mut || is_tracked_view || is_ghost_view {
+                return expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, outer_modifier)?);
+            }
+
+            // TODO don't need to compute the whole type here
+            let (is_mut_ref_param, _ty) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, param);
 
             if is_mut_ref_param {
                 let tracked_opt = get_expr_tracked(bctx, &arg);
@@ -1155,8 +1152,6 @@ fn fn_call_to_vir<'tcx>(
             } else if is_decreases || is_invariant || is_invariant_ensures {
                 let bctx = &BodyCtxt { in_ghost: true, ..bctx.clone() };
                 expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, ExprModifier::REGULAR)?)
-            } else if is_ghost_borrow_mut || is_tracked_borrow_mut {
-                expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, outer_modifier)?)
             } else {
                 expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, ExprModifier::REGULAR)?)
             }
@@ -2212,6 +2207,7 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
                 )))
             }
             UnOp::Deref => {
+                let arg = get_expr_tracked_view_call(bctx, arg).unwrap_or(arg);
                 let inner =
                     expr_to_vir_inner(bctx, arg, is_expr_typ_mut_ref(bctx, arg, modifier)?)?;
                 Ok(inner)
@@ -2324,11 +2320,13 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
         }
         ExprKind::Path(QPath::Resolved(None, path)) => match path.res {
             Res::Local(id) => match tcx.hir().get(id) {
-                Node::Binding(pat) => Ok(mk_expr(if modifier.addr_of {
-                    ExprX::VarLoc(Arc::new(pat_to_var(pat)))
-                } else {
-                    ExprX::Var(Arc::new(pat_to_var(pat)))
-                })),
+                Node::Binding(pat) => {
+                    Ok(mk_expr(if modifier.addr_of {
+                        ExprX::VarLoc(Arc::new(pat_to_var(pat)))
+                    } else {
+                        ExprX::Var(Arc::new(pat_to_var(pat)))
+                    }))
+                }
                 node => unsupported_err!(expr.span, format!("Path {:?}", node)),
             },
             Res::Def(def_kind, id) => {
