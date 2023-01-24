@@ -149,7 +149,7 @@ pub enum UnaryOp {
     /// Force integer value into range given by IntRange (e.g. by using mod)
     Clip { range: IntRange, truncate: bool },
     /// Operations that coerce from/to builtin::Ghost or builtin::Tracked
-    CoerceMode { op_mode: Mode, from_mode: Mode, to_mode: Mode, kind: ModeCoercion },
+    CoerceMode { op_mode: Mode, from_mode: Mode, to_mode: Mode, kind: ModeCoercion, ghost_block: bool },
     /// Internal consistency check to make sure finalize_exp gets called
     /// (appears only briefly in SST before finalize_exp is called)
     MustBeFinalized,

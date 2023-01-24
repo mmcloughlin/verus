@@ -266,7 +266,7 @@ fn get_var_loc_mode(
             x_mode
         }
         ExprX::Unary(
-            UnaryOp::CoerceMode { op_mode, from_mode, to_mode, kind: ModeCoercion::BorrowMut },
+            UnaryOp::CoerceMode { op_mode, from_mode, to_mode, kind: ModeCoercion::BorrowMut, ghost_block },
             e1,
         ) => {
             assert!(!init_not_mut);
@@ -285,8 +285,13 @@ fn get_var_loc_mode(
                 );
             }
 
+            let mut block_ghostness = if *ghost_block { Ghost::Ghost } else { typing.block_ghostness };
+            swap(&mut block_ghostness, &mut typing.block_ghostness);
+
             let param_mode = mode_join(outer_mode, *from_mode);
             let mode1 = get_var_loc_mode(typing, param_mode, Some(*to_mode), e1, init_not_mut)?;
+
+            swap(&mut block_ghostness, &mut typing.block_ghostness);
 
             if !mode_le(mode1, *from_mode) {
                 return err_string(
@@ -539,7 +544,7 @@ fn check_expr_handle_mut_arg(
 
             Ok(mode)
         }
-        ExprX::Unary(UnaryOp::CoerceMode { op_mode, from_mode, to_mode, kind }, e1) => {
+        ExprX::Unary(UnaryOp::CoerceMode { op_mode, from_mode, to_mode, kind, ghost_block }, e1) => {
             // same as a call to an op_mode function with parameter from_mode and return to_mode
             if typing.check_ghost_blocks {
                 if (*op_mode == Mode::Exec) != (typing.block_ghostness == Ghost::Exec) {
@@ -555,8 +560,11 @@ fn check_expr_handle_mut_arg(
                     format!("cannot perform operation with mode {}", op_mode),
                 );
             }
+            let mut block_ghostness = if *ghost_block { Ghost::Ghost } else { typing.block_ghostness };
+            swap(&mut block_ghostness, &mut typing.block_ghostness);
             let param_mode = mode_join(outer_mode, *from_mode);
             check_expr_has_mode(typing, param_mode, e1, *from_mode)?;
+            swap(&mut block_ghostness, &mut typing.block_ghostness);
             if *kind == ModeCoercion::BorrowMut {
                 return Ok((*to_mode, Some(*to_mode)));
             } else {
