@@ -284,7 +284,10 @@ fn get_var_loc_mode(
                     format!("cannot perform operation with mode {}", op_mode),
                 );
             }
-            let mode1 = get_var_loc_mode(typing, outer_mode, Some(*to_mode), e1, init_not_mut)?;
+
+            let param_mode = mode_join(outer_mode, *from_mode);
+            let mode1 = get_var_loc_mode(typing, param_mode, Some(*to_mode), e1, init_not_mut)?;
+
             if !mode_le(mode1, *from_mode) {
                 return err_string(
                     &expr.span,
@@ -586,21 +589,8 @@ fn check_expr_handle_mut_arg(
                 Ok(mode_read)
             }
         }
-        ExprX::Loc(e, is_tracked) => {
-            if *is_tracked {
-                let mut block_ghostness = Ghost::Ghost;
-                swap(&mut typing.block_ghostness, &mut block_ghostness);
-                let res = check_expr_handle_mut_arg(typing, outer_mode, erasure_mode, e)?;
-                swap(&mut typing.block_ghostness, &mut block_ghostness);
-
-                if res != (Mode::Proof, Some(Mode::Proof)) {
-                    return err_str(&expr.span, "expected a tracked-mode location");
-                } else {
-                    return Ok((Mode::Exec, Some(Mode::Exec)));
-                }
-            } else {
-                return check_expr_handle_mut_arg(typing, outer_mode, erasure_mode, e);
-            }
+        ExprX::Loc(e) => {
+            return check_expr_handle_mut_arg(typing, outer_mode, erasure_mode, e);
         }
         ExprX::Binary(op, e1, e2) => {
             let op_mode = match op {

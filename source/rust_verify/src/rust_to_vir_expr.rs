@@ -874,7 +874,19 @@ fn fn_call_to_vir<'tcx>(
         );
     }
 
-    if is_ghost_exec || is_tracked_exec {
+    let inputs = {
+        let fn_sig = bctx.ctxt.tcx.fn_sig(f);
+        let fn_sig = fn_sig.skip_binder();
+        fn_sig.inputs()
+    };
+
+    let is_tracked_exec_of_borrow_mut = if is_tracked_exec {
+        // TODO don't need to compute the whole type here
+        let (is_mut_ref_param, _ty) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, &inputs[0]);
+        is_mut_ref_param
+    } else { false };
+
+    if (is_ghost_exec || is_tracked_exec) && !is_tracked_exec_of_borrow_mut {
         unsupported_err_unless!(len == 1, expr.span, "expected Ghost/Tracked", &args);
         let arg = &args[0];
         if get_ghost_block_opt(bctx.ctxt.tcx.hir().attrs(expr.hir_id))
@@ -1036,12 +1048,6 @@ fn fn_call_to_vir<'tcx>(
         return Ok(arg);
     }
 
-    let inputs = {
-        let fn_sig = bctx.ctxt.tcx.fn_sig(f);
-        let fn_sig = fn_sig.skip_binder();
-        fn_sig.inputs()
-    };
-
     if is_new_strlit {
         let s = if let ExprKind::Lit(lit0) = &args[0].kind {
             if let rustc_ast::LitKind::Str(s, _) = lit0.node {
@@ -1121,7 +1127,7 @@ fn fn_call_to_vir<'tcx>(
         .iter()
         .zip(inputs)
         .map(|(arg, param)| {
-            if is_ghost_borrow_mut || is_tracked_borrow_mut || is_tracked_view || is_ghost_view {
+            if is_ghost_borrow_mut || is_tracked_borrow_mut || is_tracked_view || is_ghost_view || is_tracked_exec_of_borrow_mut {
                 return expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, outer_modifier)?);
             }
 
@@ -1129,7 +1135,7 @@ fn fn_call_to_vir<'tcx>(
             let (is_mut_ref_param, _ty) = maybe_mutref_mid_ty_to_vir(bctx.ctxt.tcx, param);
 
             if is_mut_ref_param {
-                let tracked_opt = get_expr_tracked(bctx, &arg);
+                /*let tracked_opt = get_expr_tracked(bctx, &arg);
                 let is_tracked = tracked_opt.is_some();
 
                 let arg = if let Some((inner_arg, fun_span)) = tracked_opt {
@@ -1137,7 +1143,7 @@ fn fn_call_to_vir<'tcx>(
                     inner_arg
                 } else {
                     arg
-                };
+                };*/
 
                 let arg_x = match &arg.kind {
                     ExprKind::AddrOf(BorrowKind::Ref, Mutability::Mut, e) => e,
@@ -1148,7 +1154,7 @@ fn fn_call_to_vir<'tcx>(
                     _ => false,
                 };
                 let expr = expr_to_vir(bctx, arg_x, ExprModifier { addr_of: true, deref_mut })?;
-                Ok(spanned_typed_new(arg.span, &expr.typ.clone(), ExprX::Loc(expr, is_tracked)))
+                Ok(spanned_typed_new(arg.span, &expr.typ.clone(), ExprX::Loc(expr)))
             } else if is_decreases || is_invariant || is_invariant_ensures {
                 let bctx = &BodyCtxt { in_ghost: true, ..bctx.clone() };
                 expr_to_vir(bctx, arg, is_expr_typ_mut_ref(bctx, arg, ExprModifier::REGULAR)?)
@@ -1432,6 +1438,28 @@ fn fn_call_to_vir<'tcx>(
             kind: ModeCoercion::Other,
         };
         Ok(mk_expr(ExprX::Unary(op, vir_args[0].clone())))
+    } else if is_tracked_exec_of_borrow_mut {
+        assert!(vir_args.len() == 1);
+        let op = UnaryOp::CoerceMode {
+            op_mode: Mode::Exec,
+            from_mode: Mode::Proof,
+            to_mode: Mode::Exec,
+            kind: ModeCoercion::BorrowMut,
+        };
+
+        let mut vir_arg = vir_args[0].clone();
+
+        if get_ghost_block_opt(bctx.ctxt.tcx.hir().attrs(expr.hir_id))
+            == Some(GhostBlockAttr::Wrapper)
+        {
+            vir_arg = mk_expr(ExprX::Ghost {
+                alloc_wrapper: Some(name),
+                tracked: true,
+                expr: vir_arg,
+            });
+        }
+
+        Ok(mk_expr(ExprX::Unary(op, vir_arg)))
     } else if is_tracked_exec || is_tracked_exec_borrow {
         assert!(vir_args.len() == 1);
         let op = UnaryOp::CoerceMode {
@@ -2207,7 +2235,6 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
                 )))
             }
             UnOp::Deref => {
-                let arg = get_expr_tracked_view_call(bctx, arg).unwrap_or(arg);
                 let inner =
                     expr_to_vir_inner(bctx, arg, is_expr_typ_mut_ref(bctx, arg, modifier)?)?;
                 Ok(inner)
