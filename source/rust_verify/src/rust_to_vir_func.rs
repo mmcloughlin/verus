@@ -5,8 +5,10 @@ use crate::context::{BodyCtxt, Context};
 use crate::rust_to_vir_base::{
     check_generics_bounds_fun, def_id_to_vir_path, foreign_param_to_var,
     maybe_mutref_mid_ty_to_vir, mid_ty_to_vir,
+    is_tracked_or_ghost_type,
+    local_to_var,
 };
-use crate::rust_to_vir_expr::{expr_to_vir, pat_to_mut_var, ExprModifier};
+use crate::rust_to_vir_expr::{expr_to_vir_maybe_skip_prefix, pat_to_mut_var, ExprModifier};
 use crate::util::{err_span_str, err_span_string, spanned_new, unsupported_err_span};
 use crate::{unsupported, unsupported_err, unsupported_err_unless, unsupported_unless};
 use rustc_ast::Attribute;
@@ -23,6 +25,14 @@ use vir::ast::{
     ParamX, Typ, TypX, VirErr,
 };
 use vir::def::RETURN_VALUE;
+use std::collections::HashMap;
+use rustc_middle::ty::TyS;
+use rustc_hir::{
+    BindingAnnotation, Block, Expr, ExprKind, Local,
+    Node, Pat, PatKind, Stmt, StmtKind,
+    LocalSource, Path,
+    PathSegment,
+};
 
 pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::ast::Path {
     // turn a::b::c into a::b::method_name
@@ -39,12 +49,13 @@ pub(crate) fn body_to_vir<'tcx>(
     body: &Body<'tcx>,
     mode: Mode,
     external_body: bool,
+    skip_stmts: Option<usize>,
 ) -> Result<vir::ast::Expr, VirErr> {
     let def = rustc_middle::ty::WithOptConstParam::unknown(id.hir_id.owner);
     let types = ctxt.tcx.typeck_opt_const_arg(def);
-    let bctx =
-        BodyCtxt { ctxt: ctxt.clone(), types, mode, external_body, in_ghost: mode != Mode::Exec };
-    expr_to_vir(&bctx, &body.value, ExprModifier::REGULAR)
+    let bctx = BodyCtxt { ctxt: ctxt.clone(), types, mode, external_body, in_ghost: mode != Mode::Exec };
+
+    expr_to_vir_maybe_skip_prefix(&bctx, &body.value, ExprModifier::REGULAR, skip_stmts)
 }
 
 fn check_fn_decl<'tcx>(
@@ -246,7 +257,21 @@ pub(crate) fn check_item_fn<'tcx>(
         }
     }
 
-    let mut vir_body = body_to_vir(ctxt, body_id, body, mode, vattrs.external_body)?;
+    let skip_stmts = if vattrs.uses_mode_param_uwrap_encoding {
+        if mode != Mode::Exec {
+            return err_span_str(
+                sig.span,
+                "'uses_mode_param_uwrap_encoding' is only for exec-mode functions",
+            );
+        }
+
+        let n = handle_mode_wrapped_params(ctxt, body_id, &sig.span, body, &mut vir_params, inputs);
+        Some(n)
+    } else {
+        None
+    };
+
+    let mut vir_body = body_to_vir(ctxt, body_id, body, mode, vattrs.external_body, skip_stmts)?;
 
     let header = vir::headers::read_header(&mut vir_body)?;
     match (&kind, header.no_method_body) {
@@ -412,7 +437,7 @@ pub(crate) fn check_item_const<'tcx>(
         return Ok(());
     }
     let body = find_body(ctxt, body_id);
-    let vir_body = body_to_vir(ctxt, body_id, body, mode, vattrs.external_body)?;
+    let vir_body = body_to_vir(ctxt, body_id, body, mode, vattrs.external_body, None)?;
 
     let ret_name = Arc::new(RETURN_VALUE.to_string());
     let ret = spanned_new(span, ParamX { name: ret_name, typ: typ.clone(), mode, is_mut: false });
@@ -517,3 +542,318 @@ pub(crate) fn check_foreign_item_fn<'tcx>(
     vir.functions.push(function);
     Ok(())
 }
+
+
+/*fn handle_mode_wrapped_params<'tcx>(
+    ctxt: &Context<'tcx>,
+    span: &Span,
+    vir_body: &mut Expr,
+    vir_params: Vec<vir::ast::Param>,
+    inputs: &[&'tcx TyS<'tcx>]) -> Result<Vec<vir::ast::Param>, ()>
+{
+    let (vir_body_stmts, vir_body_expr) = match &vir_body.x {
+        ExprX::Block(stmts, expr) => (stmts, expr),
+        _ => { return Err(()); }
+    };
+
+    let mut expected_params_to_map = vec![];
+    assert!(vir_params.len() == inputs.len());
+    for (vir_param, input) in vir_params.iter().zip(inputs.iter()) {
+        if is_tracked_or_ghost_type(ctxt.tcx, input) {
+            expected_params_to_map.push(vir_param.x.name.clone());
+        }
+    }
+
+    if vir_body_stmts.len() < expected_params_to_map.len() + 1 {
+        return Err(());
+    }
+
+    let mut new_names = vec![];
+    for i in 0..expected_params_to_map.len() {
+        match &vir_body_stmts[i].x {
+            StmtX::Decl { pattern, mode: Mode::Exec, init: None } => {
+                match &pattern.x {
+                    PatternX::Var { name, mutable: false } => {
+                        new_names.push(name.clone());
+                    }
+                    _ => {
+                        return Err(());
+                    }
+                }
+            }
+            _ => {
+                return Err(());
+            }
+        }
+    }
+
+    let mut name_map: HashMap<vir::ast::Ident, vir::ast::Ident> = HashMap::new();
+    let mut lhss: Vec<vir::ast::Ident> = vec![];
+    let mut rhss: Vec<vir::ast::Ident> = vec![];
+
+    let lhs_to_ident = |lhs: &Expr| {
+        match &lhs.x {
+            ExprX::Loc(e) => {
+                match &e.x {
+                    ExprX::VarLoc(ident) => Ok(ident.clone()),
+                    _ => Err(()),
+                }
+            }
+            _ => Err(()),
+        }
+    };
+    let rhs_to_ident = |rhs: &Expr| {
+        match &rhs.x {
+            ExprX::Var(ident) => Ok(ident.clone()),
+            _ => Err(()),
+        }
+    };
+
+    match &vir_body_stmts[expected_params_to_map.len()].x {
+        StmtX::Expr(e_ghost_block) => {
+            match &e_ghost_block.x {
+                ExprX::Ghost { alloc_wrapper: None, tracked: false, expr } => {
+                    match &expr.x {
+                        ExprX::Block(block_stmts, None) => {
+                            if block_stmts.len() != expected_params_to_map.len() {
+                                return Err(());
+                            }
+                            for stmt in block_stmts.iter() {
+                                match &stmt.x {
+                                    StmtX::Expr(assign_expr) => {
+                                        match &assign_expr.x {
+                                            ExprX::Assign { init_not_mut: true, lhs, rhs } => {
+                                                let lhs_ident = lhs_to_ident(lhs)?;
+                                                let rhs_ident = rhs_to_ident(rhs)?;
+                                                lhss.push(lhs_ident.clone());
+                                                rhss.push(rhs_ident.clone());
+                                                name_map.insert(rhs_ident, lhs_ident);
+                                            }
+                                            _ => { return Err(()); }
+                                        }
+                                    }
+                                    _ => { return Err(()); }
+                                }
+                            }
+                        }
+                        _ => { return Err(()); }
+                    }
+                }
+                _ => { return Err(()); }
+            }
+        }
+        _ => { return Err(()); }
+    }
+
+    expected_params_to_map.sort();
+    new_names.sort();
+    lhss.sort();
+    rhss.sort();
+
+    let idents_unique = |v: &Vec<vir::ast::Ident>| {
+        if v.len() >= 2 {
+            // Can assume sorted
+            for i in 0 .. v.len() - 1 {
+                if v[i] == v[i + 1] {
+                    return false;
+                }
+            }
+        }
+        true
+    };
+
+    if !idents_unique(&expected_params_to_map) {
+        return Err(());
+    }
+    if !idents_unique(&new_names) {
+        return Err(());
+    }
+    if expected_params_to_map != rhss {
+        return Err(());
+    }
+    if new_names != lhss {
+        return Err(());
+    }
+    
+    let mut vir_params = vir_params;
+    for vir_param in vir_params.iter_mut() {
+        match name_map.get(&vir_param.x.name) {
+            None => { }
+            Some(new_name) => {
+                *vir_param = spanned_new(*span, ParamX {
+                        name: new_name.clone(), ..vir_param.x.clone() })
+            }
+        }
+    }
+
+    let vir_body_stmts = Arc::new(vir_body_stmts[ expected_params_to_map.len() + 1 .. ].to_vec());
+    *vir_body = vir_body.new_x(ExprX::Block(vir_body_stmts, vir_body_expr.clone()));
+
+    Ok(vir_params)
+}*/
+
+fn handle_mode_wrapped_params<'tcx>(
+    ctxt: &Context<'tcx>,
+    body_id: &BodyId,
+    span: &Span,
+    body: &Body<'tcx>,
+    vir_params: &mut Vec<vir::ast::Param>,
+    inputs: &[&'tcx TyS<'tcx>]) -> usize
+{
+    let def = rustc_middle::ty::WithOptConstParam::unknown(body_id.hir_id.owner);
+    let types = ctxt.tcx.typeck_opt_const_arg(def);
+
+    let stmts = match &body.value.kind {
+        ExprKind::Block(block, _) => {
+            block.stmts
+        },
+        _ => { panic!("expected block"); }
+    };
+
+    let mut tracked_params: Vec<String> = vec![];
+    let mut ghost_params: Vec<String> = vec![];
+
+    assert!(vir_params.len() == inputs.len());
+    for (vir_param, input) in vir_params.iter().zip(inputs.iter()) {
+        match is_tracked_or_ghost_type(ctxt.tcx, input) {
+            Some(true) => 
+                tracked_params.push((*vir_param.x.name).clone()),
+            Some(false) =>
+                ghost_params.push((*vir_param.x.name).clone()),
+            None => { }
+        }
+    }
+
+    let n_stmts = tracked_params.len() + ghost_params.len() + 2;
+    assert!(stmts.len() >= n_stmts);
+    let ghost_let_stmts = &stmts[0 .. ghost_params.len()];
+    let ghost_assign_block = &stmts[ghost_params.len()];
+    let tracked_let_stmts = &stmts[ghost_params.len() + 1 .. ghost_params.len() + 1 + tracked_params.len()];
+    let tracked_assign_block = &stmts[ghost_params.len() + 1 + tracked_params.len()];
+
+    let decl_to_name = |stmt: &Stmt| {
+        match &stmt.kind {
+            StmtKind::Local(Local { pat: Pat { kind: PatKind::Binding(
+                BindingAnnotation::Unannotated,
+                hir_id,
+                ident,
+                None
+            ), .. },
+            ty: _,
+            init: None,
+            hir_id: _,
+            span: _,
+            source: LocalSource::Normal,
+            }) => local_to_var(ident, hir_id.local_id),
+            _ => panic!("expected 'let' statement here"),
+        }
+    };
+
+    let expr_to_var_name = |expr: &Expr| {
+        match &expr.kind {
+            ExprKind::Path(QPath::Resolved(None, Path { res: Res::Local(id), segments, span: _ })) if segments.len() == 1 => {
+                match &segments[0] {
+                    PathSegment { ident: _, hir_id: _, res: Some(_), args: None, infer_args: true } => { }
+                    _ => panic!("expected call"),
+                }
+                match ctxt.tcx.hir().get(*id) {
+                    Node::Binding(pat) => {
+                        crate::rust_to_vir_expr::pat_to_var(pat)
+                    }
+                    _ => panic!("expected var"),
+                }
+            }
+            _ => panic!("expected var"),
+        }
+    };
+
+    let expr_get_call_to_var_name = |expr: &Expr, tracked: bool| {
+        match &expr.kind {
+            ExprKind::MethodCall(_name_and_generics, _call_span_0, all_args, _fn_span) => {
+                assert!(all_args.len() == 1);
+                let fn_def_id = types
+                    .type_dependent_def_id(expr.hir_id)
+                    .expect("def id of the method definition");
+                let f_name = ctxt.tcx.def_path_str(fn_def_id);
+                assert!(f_name == (if tracked {
+                    "builtin::Tracked::<A>::get"
+                } else {
+                    "builtin::Ghost::<A>::get"
+                }));
+                expr_to_var_name(&all_args[0])
+            }
+            _ => panic!("expected call"),
+        }
+    };
+
+    let assign_to_name_pair = |stmt: &Stmt, tracked: bool| {
+        match &stmt.kind {
+            StmtKind::Semi(Expr {
+                kind: ExprKind::Assign(lhs, rhs, _span),
+                ..
+            }) => {
+                let lhs_name = expr_to_var_name(lhs);
+                let rhs_name = expr_get_call_to_var_name(rhs, tracked);
+                (lhs_name, rhs_name)
+            }
+            _ => panic!("expected assignment"),
+        }
+    };
+
+    let block_to_stmts = |stmt: &'tcx Stmt| {
+        match &stmt.kind {
+            StmtKind::Expr(Expr {
+                kind: ExprKind::Block(Block { stmts, expr: None, .. }, _),
+                ..
+            }) => stmts,
+            _ => panic!("expected 'block' expr here"),
+        }
+    };
+
+    let ghost_new_names: Vec<String> = ghost_let_stmts.iter().map(|stmt|
+        decl_to_name(stmt)
+    ).collect();
+    let tracked_new_names: Vec<String> = tracked_let_stmts.iter().map(|stmt|
+        decl_to_name(stmt)
+    ).collect();
+
+    let ghost_assign_stmts: &[Stmt<'tcx>] = block_to_stmts(ghost_assign_block);
+    let tracked_assign_stmts: &[Stmt<'tcx>] = block_to_stmts(tracked_assign_block);
+
+    assert!(ghost_assign_stmts.len() == ghost_params.len());
+    assert!(tracked_assign_stmts.len() == tracked_params.len());
+
+    let ghost_assign_pairs: Vec<(String, String)> = ghost_assign_stmts.iter().map(|stmt|
+        assign_to_name_pair(stmt, false)
+    ).collect();
+    let tracked_assign_pairs: Vec<(String, String)> = tracked_assign_stmts.iter().map(|stmt|
+        assign_to_name_pair(stmt, true)
+    ).collect();
+
+    for i in 0 .. ghost_assign_pairs.len() {
+        assert!(ghost_assign_pairs[i].0 == ghost_new_names[i]);
+        assert!(ghost_assign_pairs[i].1 == ghost_params[i]);
+    }
+    for i in 0 .. tracked_assign_pairs.len() {
+        assert!(tracked_assign_pairs[i].0 == tracked_new_names[i]);
+        assert!(tracked_assign_pairs[i].1 == tracked_params[i]);
+    }
+
+    let mut name_map: HashMap<String, String> = HashMap::new();
+    for pair in ghost_assign_pairs.into_iter().chain(tracked_assign_pairs.into_iter()) {
+        name_map.insert(pair.1, pair.0);
+    }
+
+    for vir_param in vir_params.iter_mut() {
+        match name_map.get(&*vir_param.x.name) {
+            None => { }
+            Some(new_name) => {
+                *vir_param = spanned_new(*span, ParamX {
+                        name: Arc::new(new_name.clone()), ..vir_param.x.clone() })
+            }
+        }
+    }
+
+    n_stmts
+}
+

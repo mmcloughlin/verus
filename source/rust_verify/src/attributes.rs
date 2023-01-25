@@ -168,6 +168,7 @@ pub(crate) enum Attr {
     Memoize,
     // Suppress the recommends check for narrowing casts that may truncate
     Truncate,
+    UsesModeParamUnwrapEncoding,
 }
 
 fn get_trigger_arg(span: Span, attr_tree: &AttrTree) -> Result<u64, VirErr> {
@@ -337,6 +338,9 @@ pub(crate) fn parse_attrs(attrs: &[Attribute]) -> Result<Vec<Attr>, VirErr> {
                 Some(box [AttrTree::Fun(_, arg, None)]) if arg == "truncate" => {
                     v.push(Attr::Truncate)
                 }
+                Some(box [AttrTree::Fun(_, arg, None)]) if arg == "uses_mode_param_unwrap_encoding" => {
+                    v.push(Attr::UsesModeParamUnwrapEncoding)
+                }
                 _ => return err_span_str(*span, "unrecognized verifier attribute"),
             },
             _ => {}
@@ -446,6 +450,7 @@ pub(crate) struct VerifierAttrs {
     pub(crate) spinoff_prover: bool,
     pub(crate) memoize: bool,
     pub(crate) truncate: bool,
+    pub(crate) uses_mode_param_uwrap_encoding: bool,
 }
 
 pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, VirErr> {
@@ -475,6 +480,7 @@ pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, V
         spinoff_prover: false,
         memoize: false,
         truncate: false,
+        uses_mode_param_uwrap_encoding: false,
     };
     for attr in parse_attrs(attrs)? {
         match attr {
@@ -505,6 +511,7 @@ pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, V
             Attr::SpinoffProver => vs.spinoff_prover = true,
             Attr::Memoize => vs.memoize = true,
             Attr::Truncate => vs.truncate = true,
+            Attr::UsesModeParamUnwrapEncoding => vs.uses_mode_param_uwrap_encoding = true,
             _ => {}
         }
     }

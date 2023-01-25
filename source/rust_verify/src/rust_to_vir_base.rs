@@ -398,6 +398,25 @@ pub(crate) fn maybe_mutref_mid_ty_to_vir<'tcx>(
     }
 }
 
+pub(crate) fn is_tracked_or_ghost_type<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    ty: rustc_middle::ty::Ty<'tcx>,
+) -> Option<bool> {
+    match ty.kind() {
+        TyKind::Adt(AdtDef { did, .. }, args) if args.len() == 1 => {
+            let def_name = vir::ast_util::path_as_rust_name(&def_id_to_vir_path(tcx, *did));
+            if def_name == "builtin::Tracked" {
+                Some(true)
+            } else if def_name == "builtin::Ghost" {
+                Some(false)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn mid_ty_to_vir<'tcx>(
     tcx: TyCtxt<'tcx>,
     ty: rustc_middle::ty::Ty<'tcx>,

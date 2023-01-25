@@ -382,6 +382,30 @@ pub(crate) fn expr_to_vir<'tcx>(
     Ok(vir_expr)
 }
 
+pub(crate) fn expr_to_vir_maybe_skip_prefix<'tcx>(
+    bctx: &BodyCtxt<'tcx>,
+    expr: &Expr<'tcx>,
+    modifier: ExprModifier,
+    skip_n_stmts: Option<usize>,
+) -> Result<vir::ast::Expr, VirErr> {
+    let mut vir_expr = match skip_n_stmts {
+       None => expr_to_vir_inner(bctx, expr, modifier)?,
+       Some(n) => {
+          let body = match &expr.kind {
+              ExprKind::Block(body, _) => body,
+              _ => panic!("expr_to_vir_maybe_skip_prefix expected block"),
+          };
+          let expr_typ = typ_of_node(bctx, &expr.hir_id, false);
+          block_to_vir(bctx, body, &expr.span, &expr_typ, modifier, n)?
+       }
+    };
+
+    for group in get_trigger(bctx.ctxt.tcx.hir().attrs(expr.hir_id))? {
+        vir_expr = vir_expr.new_x(ExprX::Unary(UnaryOp::Trigger(group), vir_expr.clone()));
+    }
+    Ok(vir_expr)
+}
+
 fn record_fun(
     ctxt: &crate::context::Context,
     span: Span,
@@ -1743,14 +1767,17 @@ pub(crate) fn block_to_vir<'tcx>(
     span: &Span,
     ty: &Typ,
     mut modifier: ExprModifier,
+    skip_n_stmts: usize,
 ) -> Result<vir::ast::Expr, VirErr> {
+    let stmts = &block.stmts[skip_n_stmts .. ];
+
     let vir_stmts: Stmts = Arc::new(
-        slice_vec_map_result(block.stmts, |stmt| stmt_to_vir(bctx, stmt))?
+        slice_vec_map_result(stmts, |stmt| stmt_to_vir(bctx, stmt))?
             .into_iter()
             .flatten()
             .collect(),
     );
-    if block.stmts.len() != 0 {
+    if stmts.len() != 0 {
         modifier = ExprModifier { deref_mut: false, ..modifier };
     }
     let vir_expr = block.expr.map(|expr| expr_to_vir(bctx, &expr, modifier)).transpose()?;
@@ -2073,7 +2100,7 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
             } else if let Some(g_attr) = get_ghost_block_opt(bctx.ctxt.tcx.hir().attrs(expr.hir_id))
             {
                 let bctx = &BodyCtxt { in_ghost: true, ..bctx.clone() };
-                let block = block_to_vir(bctx, body, &expr.span, &expr_typ(), current_modifier);
+                let block = block_to_vir(bctx, body, &expr.span, &expr_typ(), current_modifier, 0);
                 let tracked = match g_attr {
                     GhostBlockAttr::Proof => false,
                     GhostBlockAttr::Tracked => true,
@@ -2086,7 +2113,7 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
                 };
                 Ok(mk_expr(ExprX::Ghost { alloc_wrapper: None, tracked, expr: block? }))
             } else {
-                block_to_vir(bctx, body, &expr.span, &expr_typ(), modifier)
+                block_to_vir(bctx, body, &expr.span, &expr_typ(), modifier, 0)
             }
         }
         ExprKind::Call(fun, args_slice) => {
@@ -2567,7 +2594,7 @@ pub(crate) fn expr_to_vir_inner<'tcx>(
         }
         ExprKind::Loop(block, label, LoopSource::Loop, _span) => {
             let typ = typ_of_node(bctx, &block.hir_id, false);
-            let mut body = block_to_vir(bctx, block, &expr.span, &typ, ExprModifier::REGULAR)?;
+            let mut body = block_to_vir(bctx, block, &expr.span, &typ, ExprModifier::REGULAR, 0)?;
             let header = vir::headers::read_header(&mut body)?;
             let label = label.map(|l| l.ident.to_string());
             Ok(mk_expr(ExprX::Loop { label, cond: None, body, invs: header.loop_invariants() }))

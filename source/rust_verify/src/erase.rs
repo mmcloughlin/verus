@@ -67,6 +67,7 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::attributes::VerifierAttrs;
 
 use vir::ast::{
     Datatype, ExprX, FieldOpr, Fun, Function, GenericBoundX, Krate, Mode, Path, Pattern, PatternX,
@@ -767,7 +768,7 @@ fn erase_expr_opt(ctxt: &Ctxt, mctxt: &mut MCtxt, expect: Mode, expr: &Expr) -> 
                 _ => erase_expr_opt(ctxt, mctxt, modeb, eb),
             };
             let keep = |mctxt: &mut MCtxt, eb| {
-                let e1 = erase_block(ctxt, mctxt, expect, e1);
+                let e1 = erase_block(ctxt, mctxt, expect, e1, 0, 0);
                 let e2_opt = e2_opt.as_ref().map(|e2| P(erase_expr(ctxt, mctxt, expect, e2)));
                 ExprKind::If(P(eb), P(e1), e2_opt)
             };
@@ -858,13 +859,13 @@ fn erase_expr_opt(ctxt: &Ctxt, mctxt: &mut MCtxt, expect: Mode, expr: &Expr) -> 
         }
         ExprKind::Loop(block, label) => {
             // The mode checker only allows loops for Mode::Exec
-            let block = erase_block(ctxt, mctxt, Mode::Exec, block);
+            let block = erase_block(ctxt, mctxt, Mode::Exec, block, 0, 0);
             ExprKind::Loop(P(block), *label)
         }
         ExprKind::While(eb, block, label) => {
             // The mode checker only allows loops for Mode::Exec
             let eb = erase_expr(ctxt, mctxt, Mode::Exec, eb);
-            let block = erase_block(ctxt, mctxt, Mode::Exec, block);
+            let block = erase_block(ctxt, mctxt, Mode::Exec, block, 0, 0);
             ExprKind::While(P(eb), P(block), *label)
         }
         ExprKind::Ret(None) => ExprKind::Ret(None),
@@ -879,7 +880,7 @@ fn erase_expr_opt(ctxt: &Ctxt, mctxt: &mut MCtxt, expect: Mode, expr: &Expr) -> 
             if is_inv_block {
                 ExprKind::Block(P(erase_inv_block(ctxt, mctxt, expect, block)), None)
             } else {
-                ExprKind::Block(P(erase_block(ctxt, mctxt, expect, block)), None)
+                ExprKind::Block(P(erase_block(ctxt, mctxt, expect, block, 0, 0)), None)
             }
         }
         _ => {
@@ -1056,12 +1057,20 @@ fn erase_inv_block(ctxt: &Ctxt, mctxt: &mut MCtxt, expect: Mode, block: &Block) 
     }
 }
 
-fn erase_block(ctxt: &Ctxt, mctxt: &mut MCtxt, expect: Mode, block: &Block) -> Block {
-    let stmts: Vec<Stmt> = block
+fn erase_block(ctxt: &Ctxt, mctxt: &mut MCtxt, expect: Mode, block: &Block,
+      skip_stmts: usize, keep_as_is: usize) -> Block {
+    let stmts = block
         .stmts
         .iter()
         .enumerate()
-        .filter_map(|(i, stmt)| erase_stmt(ctxt, mctxt, expect, stmt, i == block.stmts.len() - 1))
+        .skip(skip_stmts)
+        .filter_map(|(i, stmt)| {
+            if i < skip_stmts + keep_as_is {
+                Some(stmt.clone())
+            } else {
+                erase_stmt(ctxt, mctxt, expect, stmt, i == block.stmts.len() - 1)
+            }
+        })
         .collect();
     let Block { id, rules, span, .. } = *block; // for asymptotic efficiency, don't call block.clone()
     Block { stmts, id, rules, span, tokens: block.tokens.clone(), could_be_bare_literal: false }
@@ -1080,7 +1089,7 @@ fn erase_fn(
     ctxt: &Ctxt,
     mctxt: &mut MCtxt,
     f: &rustc_ast::ast::Fn,
-    external_body: bool,
+    vattrs: &VerifierAttrs,
     is_trait: bool,
 ) -> Option<rustc_ast::ast::Fn> {
     let rustc_ast::ast::Fn { defaultness, sig, generics, body: body_opt } = f;
@@ -1128,12 +1137,52 @@ fn erase_fn(
     let decl = FnDecl { inputs: new_inputs, output };
     let sig = FnSig { decl: P(decl), ..sig.clone() };
     mctxt.ret_mode = Some(ret_mode);
-    mctxt.external_body = external_body;
+    mctxt.external_body = vattrs.external_body;
     let body_opt = if is_trait { &None } else { body_opt };
-    let body_opt = body_opt.as_ref().map(|body| P(erase_block(ctxt, mctxt, ret_mode, &**body)));
+    let body_opt = body_opt.as_ref().map(|body| {
+        let (skip_n, keep_n) = get_mode_unwrapping_skip(ctxt, vattrs, body);
+        P(erase_block(ctxt, mctxt, ret_mode, &**body, skip_n, keep_n))
+    });
     mctxt.ret_mode = None;
     mctxt.external_body = false;
     Some(rustc_ast::ast::Fn { defaultness: *defaultness, sig, generics, body: body_opt })
+}
+
+fn get_mode_unwrapping_skip(
+    ctxt: &Ctxt,
+    vattrs: &VerifierAttrs,
+    block: &Block) -> (usize, usize)
+{
+    if !vattrs.uses_mode_param_uwrap_encoding { return (0, 0); }
+
+    let a;
+    let b;
+
+    let mut i = 0;
+    loop {
+        match &block.stmts[i].kind {
+            StmtKind::Local(_) => { }
+            StmtKind::Expr(_) => { i += 1; a = i; break; }
+            _ => panic!("get_mode_unwrapping_skip failed"),
+        }
+        i += 1;
+    }
+    loop {
+        match &block.stmts[i].kind {
+            StmtKind::Local(_) => { }
+            StmtKind::Expr(_) => { i += 1; b = i; break; }
+            _ => panic!("get_mode_unwrapping_skip failed"),
+        }
+        i += 1;
+    }
+
+    if ctxt.keep_proofs {
+        // skip ghost, keep tracked
+        (a, b - a)
+    } else {
+        // skip ghost + tracked
+        (b, 0)
+    }
 }
 
 fn erase_assoc_item(
@@ -1151,7 +1200,7 @@ fn erase_assoc_item(
             if vattrs.is_variant.is_some() || vattrs.get_variant.is_some() {
                 return None;
             }
-            let erased = erase_fn(ctxt, mctxt, f, vattrs.external_body, is_trait);
+            let erased = erase_fn(ctxt, mctxt, f, &vattrs, is_trait);
             erased.map(|f| update_item(item, AssocItemKind::Fn(Box::new(f))))
         }
         AssocItemKind::TyAlias(_) => Some(item.clone()),
@@ -1259,7 +1308,7 @@ fn erase_item(ctxt: &Ctxt, mctxt: &mut MCtxt, item: &Item) -> Vec<P<Item>> {
             if vattrs.external {
                 return vec![P(item.clone())];
             }
-            match erase_fn(ctxt, mctxt, kind, vattrs.external_body, false) {
+            match erase_fn(ctxt, mctxt, kind, &vattrs, false) {
                 None => return vec![],
                 Some(kind) => ItemKind::Fn(Box::new(kind)),
             }
