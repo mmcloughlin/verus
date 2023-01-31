@@ -338,23 +338,23 @@ Cache {
     //////////////////////////////////////////////////////////////////////
     #[inductive(start_read)]
     fn start_read_inductive(pre: Self, post: Self, cache_idx: CacheIdx, disk_idx: DiskIdx) {
-        // disk_index_consistency_invariant
-        assert forall |di|
-            // A truckload of boilerplate...
-        {
-            &&& post.disk_idx_to_cache_idx.contains_key(di)
-            &&& post.disk_idx_to_cache_idx[di].is_Some()
-        } implies {
-            let cache_idx = post.disk_idx_to_cache_idx[di].get_Some_0();
-            &&& post.entries.contains_key(cache_idx)
-            &&& post.entries[cache_idx] !== Entry::Empty
-            &&& post.entries[cache_idx].get_disk_idx() === di
-        } by {
-            if disk_idx !== di {
-                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
-                // (Which Dafny gets for free.)
-            }
-        }
+//        // disk_index_consistency_invariant
+//        assert forall |di|
+//            // A truckload of boilerplate...
+//        {
+//            &&& post.disk_idx_to_cache_idx.contains_key(di)
+//            &&& post.disk_idx_to_cache_idx[di].is_Some()
+//        } implies {
+//            let cache_idx = post.disk_idx_to_cache_idx[di].get_Some_0();
+//            &&& post.entries.contains_key(cache_idx)
+//            &&& post.entries[cache_idx] !== Entry::Empty
+//            &&& post.entries[cache_idx].get_disk_idx() === di
+//        } by {
+//            if disk_idx !== di {
+//                assert( pre.disk_idx_to_cache_idx.contains_key(di));    // to write this hypothesis trigger. :v(
+//                // (Which Dafny gets for free.)
+//            }
+//        }
     }
 
     #[inductive(finish_read)]
