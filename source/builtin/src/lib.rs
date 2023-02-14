@@ -235,24 +235,24 @@ pub fn internal_arbitrary<A>(_: u64) -> A {
 //
 
 #[verifier(external_body)]
-pub struct Ghost<#[verifier(strictly_positive)] A> {
+pub struct Ghost<#[verifier(strictly_positive)] A: ?Sized> {
     phantom: PhantomData<A>,
 }
 
 #[verifier(external_body)]
-pub struct Tracked<#[verifier(strictly_positive)] A> {
+pub struct Tracked<#[verifier(strictly_positive)] A: ?Sized> {
     phantom: PhantomData<A>,
 }
 
-impl<A> Ghost<A> {
+impl<A: ?Sized> Ghost<A> {
     #[spec]
-    pub fn view(self) -> A {
+    pub fn view(self) -> &'static A {
         unimplemented!()
     }
 
     #[spec]
     #[verifier(external_body)]
-    pub fn new(_a: A) -> Ghost<A> {
+    pub fn new(_a: &A) -> Ghost<A> {
         Ghost { phantom: PhantomData }
     }
 
@@ -278,9 +278,9 @@ impl<A> Ghost<A> {
     }
 }
 
-impl<A> Tracked<A> {
+impl<A: ?Sized> Tracked<A> {
     #[spec]
-    pub fn view(self) -> A {
+    pub fn view(self) -> &'static A {
         unimplemented!()
     }
 
@@ -294,7 +294,7 @@ impl<A> Tracked<A> {
     #[proof]
     #[verifier(external_body)]
     #[verifier(returns(proof))]
-    pub fn get(#[proof] self) -> A {
+    pub fn get(#[proof] self) -> &'static A {
         unimplemented!()
     }
 
@@ -315,7 +315,7 @@ impl<A> Tracked<A> {
     }
 }
 
-impl<A> Clone for Ghost<A> {
+impl<A: ?Sized> Clone for Ghost<A> {
     #[verifier(external_body)]
     #[inline(always)]
     fn clone(&self) -> Self {
@@ -323,7 +323,7 @@ impl<A> Clone for Ghost<A> {
     }
 }
 
-impl<A> Copy for Ghost<A> {}
+impl<A: ?Sized> Copy for Ghost<A> {}
 
 macro_rules! emit_phantom {
     ($x:ident) => {
