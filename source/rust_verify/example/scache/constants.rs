@@ -4,16 +4,16 @@ use builtin_macros::*;
 
 verus!{
 
-const NOT_MAPPED: u32 = 0xffff_ffff;
+pub const NOT_MAPPED: u32 = 0xffff_ffff;
 
-struct Config {
-    cache_size: u32
+pub struct Config {
+    pub cache_size: u32
 }
 
 impl Config {
     pub open spec fn valid_cache_ref(self, cache_ref: u32) -> bool {
-        ||| 0 <= (v as int) < self.cache_size
-        ||| v == NOT_MAPPED
+        ||| 0 <= (cache_ref as int) < self.cache_size
+        ||| cache_ref == NOT_MAPPED
     }
 }
 

@@ -3,7 +3,7 @@
 use builtin::*;
 use builtin_macros::*;
 use crate::pervasive::prelude::*;
-//use crate::pervasive::atomic_ghost::*;
+use crate::pervasive::atomic_ghost::*;
 
 // TODO(travis): "that should be fixed"
 use crate::atomic_with_ghost;
@@ -14,8 +14,10 @@ use state_machines_macros::tokenized_state_machine;
 //use option::Option::{Some, None};
 
 use crate::cache::*;
+use crate::constants::*;
 
-verus!{
+// TODO(travis): waiting on some fix to the atomic_with_ghost! macro.
+verus_old_todo_no_ghost_blocks!{
 
 // This macro generates the machinery that was handwritten in
 // scache/cache/CacheResources.i.dfy
@@ -37,11 +39,11 @@ struct_with_invariants!{
 
     // This is the translation of state_inv
     spec fn wf(&self) -> bool {
-        invariant on atomic with (instance) is (v: u32, g: Cache::disk_idx_to_cache_idx) {
+        invariant on atomic with (instance, config) is (v: u32, g: Cache::disk_idx_to_cache_idx) {
             &&& config.valid_cache_ref(v)
             &&& g@.instance == instance
-            &&& g@.key == v as int
-            &&& g@.value == if v == NOT_MAPPED { None } else { Some(v as nat) }
+            &&& g@.key == DiskIdx(v as nat)
+            &&& g@.value == if v == NOT_MAPPED { None } else { Some(CacheIdx(v as nat)) }
         }
     }
 }
@@ -50,15 +52,16 @@ impl DiskIndexTableEntry {
     // Read, but we already know the answer(!).
     //fn read_known_cache_idx(&self, disk_idx: Ghost<nat>, config: Ghost<Config>,
 
-    fn read(&self, disk_idx: Ghost<nat>, config: Ghost<Config>) -> (cache_idx: u32)
+    fn read(&self, disk_idx: Ghost<nat>) -> (cache_idx: u32)
     requires self.wf()
-    ensures config.valid_cache_ref(cache_idx)
+    ensures self.config.valid_cache_ref(cache_idx)
     {
-        atomic_with_ghost!(
+        let cache_idx = atomic_with_ghost!(
             self.atomic => load();
             ghost g => {
             }
-        )
+        );
+        cache_idx
     }
 }
 

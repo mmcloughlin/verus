@@ -5,6 +5,7 @@ use builtin_macros::*;
 use crate::pervasive::prelude::*;
 
 use crate::pervasive::multiset::assert_multisets_equal;
+use crate::pervasive::multiset::*;
 //use crate::assert_multisets_equal;
 
 use state_machines_macros::tokenized_state_machine;

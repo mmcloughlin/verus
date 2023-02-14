@@ -60,13 +60,6 @@ impl Entry {
 pub spec const MAX_DISK_PAGES:nat = 0xffff_ffff_ffff_ffff;
 pub spec const MAX_CACHE_SIZE:nat = 0xffff_ffff;
 
-// TODO: move to map_v.rs
-impl<K, V> Map<K, V> {
-    pub open spec fn contains_key(self, key: K) -> bool {
-        self.dom().contains(key)
-    }
-}
-
 } // verus
 
 tokenized_state_machine!{
