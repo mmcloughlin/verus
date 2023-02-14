@@ -246,7 +246,7 @@ pub struct Tracked<#[verifier(strictly_positive)] A: ?Sized> {
 
 impl<A: ?Sized> Ghost<A> {
     #[spec]
-    pub fn view(self) -> &'static A {
+    pub fn view<'a>(self) -> &'a A {
         unimplemented!()
     }
 
@@ -280,7 +280,7 @@ impl<A: ?Sized> Ghost<A> {
 
 impl<A: ?Sized> Tracked<A> {
     #[spec]
-    pub fn view(self) -> &'static A {
+    pub fn view<'a>(self) -> &'a A {
         unimplemented!()
     }
 
@@ -294,7 +294,7 @@ impl<A: ?Sized> Tracked<A> {
     #[proof]
     #[verifier(external_body)]
     #[verifier(returns(proof))]
-    pub fn get(#[proof] self) -> &'static A {
+    pub fn get<'a>(#[proof] self) -> &'a A {
         unimplemented!()
     }
 
