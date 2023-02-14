@@ -19,7 +19,7 @@ pub struct Vec<#[verifier(strictly_positive)] A> {
 }
 
 impl<A> Vec<A> {
-    pub spec fn view(&self) -> Seq<A>;
+    pub spec fn view<'view>(&self) -> &'view Seq<A>;
 
     #[verifier(external_body)]
     pub fn new() -> (v: Self)

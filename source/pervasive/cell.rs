@@ -108,7 +108,7 @@ pub struct CellId {
 }
 
 impl<V> PermissionOpt<V> {
-    pub spec fn view(self) -> PermissionOptData<V>;
+    pub spec fn view<'view>(self) -> &'view PermissionOptData<V>;
 }
 
 impl<V> PCell<V> {

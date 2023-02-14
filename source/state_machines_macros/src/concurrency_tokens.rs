@@ -348,7 +348,7 @@ fn token_struct_stream(
             #[verifier(publish)]
             #[verifier(external_body)]
             #[spec]
-            pub fn view(self) -> #token_data_ty { ::std::unimplemented!() }
+            pub fn view<'view>(self) -> &'view #token_data_ty { ::std::unimplemented!() }
 
             #impl_token_stream
         }

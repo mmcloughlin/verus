@@ -7,12 +7,12 @@ use crate::pervasive::vec::*;
 verus!{
 
 pub trait SliceAdditionalSpecFns<T> {
-   spec fn view(&self) -> Seq<T>;
+   spec fn view<'view>(&self) -> &'view Seq<T>;
    spec fn spec_index(&self, i: int) -> T;
 }
 
 impl<T> SliceAdditionalSpecFns<T> for [T] {
-    spec fn view(&self) -> Seq<T>;
+    spec fn view<'view>(&self) -> &'view Seq<T>;
 
     #[verifier(inline)]
     open spec fn spec_index(&self, i: int) -> T {

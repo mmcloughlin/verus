@@ -56,9 +56,7 @@ impl<T> Duplicable<T> {
         true
     }
 
-    pub open spec fn view(self) -> T {
-        self.inst.val()
-    }
+    pub open spec fn view<'view>(self) -> &'view T { self.inst.val() }
 
     pub proof fn new(tracked t: T) -> (tracked s: Self)
         ensures s.wf() && s@ === t,
@@ -254,9 +252,7 @@ struct_with_invariants!{
 }
 
 impl<S> MyRc<S> {
-    spec fn view(self) -> S {
-        self.reader@.key@.value.get_Some_0().s
-    }
+    spec fn view<'view>(self) -> &'view S { self.reader@.key@.value.get_Some_0().s }
 
     fn new(s: S) -> Self {
         ensures(|rc: MyRc<S>| [

@@ -861,7 +861,7 @@ test_verify_one_file! {
             }
 
             impl<T> X<T> {
-                pub closed spec fn view(&self) -> T { self.t }
+                pub closed spec fn view<'view>(&self) -> &'view T { self.t }
 
                 pub fn new(t: T) -> (s: Self)
                   ensures s.view() === t

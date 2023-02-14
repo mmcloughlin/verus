@@ -151,7 +151,7 @@ impl ConcreteDirectedGraph {
             ==> 0 <= (#[trigger] self.edges@.index(i)@.index(j)) < self.edges@.len()
     }
 
-    spec fn view(&self) -> DirectedGraph<usize> {
+    spec fn view<'view>(&self) -> &'view DirectedGraph<usize> {
         DirectedGraph {
             edges: Set::<(usize, usize)>::new(|p: (usize, usize)|
                 0 <= (p.0 as int) < (self.edges@.len() as int)

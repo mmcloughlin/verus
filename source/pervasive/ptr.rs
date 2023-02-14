@@ -160,7 +160,7 @@ pub ghost struct PermissionOptData<V> {
 }
 
 impl<V> PermissionOpt<V> {
-    pub spec fn view(self) -> PermissionOptData<V>;
+    pub spec fn view<'view>(self) -> &'view PermissionOptData<V>;
 
     /// Any dereferenceable pointer must be non-null.
     /// (Note that null pointers _do_ exist and are representable by `PPtr`;

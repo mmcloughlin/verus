@@ -14,7 +14,7 @@ pub struct Permission<V> {
 }
 
 impl<V> PCell<V> {
-    pub fn view(&self) -> int { uninterpreted!() }
+    pub fn view<'view>(&self) -> &'view int { uninterpreted!() }
 
     #[verifier(external_body)]
     #[ghost(requires, equal(self.view(), (raise perm).pcell))]

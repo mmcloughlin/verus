@@ -242,7 +242,7 @@ impl<T> Interned<T> {
         &&& self.id as int == self.frag@.key
     }
 
-    spec fn view(&self) -> T {
+    spec fn view<'view>(&self) -> &'view T {
         self.frag@.value
     }
 

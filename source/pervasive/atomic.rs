@@ -110,7 +110,7 @@ macro_rules! atomic_types {
         impl $p_ident {
             #[spec]
             #[verifier(external_body)]
-            pub fn view(self) -> $p_data_ident { unimplemented!(); }
+            pub fn view<'view>(self) -> &'view $p_data_ident { unimplemented!(); }
 
             #[cfg(not(verus_macro_erase_ghost))]
             #[spec] #[verifier(publish)]

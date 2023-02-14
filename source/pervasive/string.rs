@@ -31,7 +31,7 @@ pub const fn new_strlit<'a>(s: &'a str) -> StrSlice<'a> {
 }
 
 impl<'a> StrSlice<'a> {
-    pub spec fn view(&self) -> Seq<char>;
+    pub spec fn view<'view>(&self) -> &'view Seq<char>;
 
     pub spec fn is_ascii(&self) -> bool;
 
@@ -168,7 +168,7 @@ pub proof fn axiom_str_literal_get_char<'a>(s: StrSlice<'a>, i: int)
 { }
 
 impl String {
-    pub spec fn view(&self) -> Seq<char>;
+    pub spec fn view<'view>(&self) -> &'view Seq<char>;
 
     pub spec fn is_ascii(&self) -> bool;
 

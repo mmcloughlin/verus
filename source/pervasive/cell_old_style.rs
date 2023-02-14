@@ -108,7 +108,7 @@ pub struct CellId {
 }
 
 impl<V> PermData<V> {
-    pub spec fn view(self) -> PermDataData<V>;
+    pub spec fn view<'view>(self) -> &'view PermDataData<V>;
 }
 
 }

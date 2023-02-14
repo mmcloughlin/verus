@@ -1155,7 +1155,7 @@ impl VisitMut for Visitor {
                     let view_call = quote_spanned!(at_token.span => .view());
                     let span = view.span();
                     let base = view.expr;
-                    *expr = Expr::Verbatim(quote_spanned!(span => (#base#view_call)));
+                    *expr = Expr::Verbatim(quote_spanned!(span => (*(#base#view_call))));
                 }
                 Expr::View(view) => {
                     assert!(self.assign_to);
@@ -1165,7 +1165,7 @@ impl VisitMut for Visitor {
                     let base = view.expr;
                     let borrowed: Expr =
                         Expr::Verbatim(quote_spanned!(span1 => #base.borrow_mut()));
-                    *expr = Expr::Verbatim(quote_spanned!(span2 => (*(#borrowed))));
+                    *expr = Expr::Verbatim(quote_spanned!(span2 => (**(#borrowed))));
                 }
                 Expr::Assume(assume) => {
                     let span = assume.assume_token.span;

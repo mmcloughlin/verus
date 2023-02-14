@@ -87,7 +87,7 @@ pub struct BitMap {
 }
 
 impl BitMap {
-    spec fn view(&self) -> Seq<bool> {        
+    spec fn view<'view>(&self) -> &'view Seq<bool> {
         let width = self.bits@.len() * 64;
         Seq::new(width, |i: int| u64_view(self.bits@[i/64])[i%64])
     }

@@ -183,7 +183,7 @@ pub use ptr_perm_internal;
 pub use ptr_perm;
 
 impl<V> PermData<V> {
-    pub spec fn view(self) -> PermDataData<V>;
+    pub spec fn view<'view>(self) -> &'view PermDataData<V>;
 
     /// Any dereferenceable pointer must be non-null.
     /// (Note that null pointers _do_ exist and are representable by `PPtr`;

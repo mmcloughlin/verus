@@ -146,7 +146,7 @@ impl !Sync for IsThread { }
 impl !Send for IsThread { }
 
 impl IsThread {
-    pub spec fn view(&self) -> ThreadId;
+    pub spec fn view<'view>(&self) -> &'view ThreadId;
 
     /// Guarantees that any two `IsThread` objects on the same thread
     /// will have the same ID.
@@ -203,7 +203,7 @@ unsafe impl<V> Sync for ThreadShareable<V> { }
 unsafe impl<V> Send for ThreadShareable<V> { }
 
 impl<V> ThreadShareable<V> {
-    pub spec fn view(&self) -> V;
+    pub spec fn view<'view>(&self) -> &'view V;
     pub spec fn id(&self) -> ThreadId;
 
     /// Recover the inner value provide we are on the same thread.
