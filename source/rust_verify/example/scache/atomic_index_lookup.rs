@@ -49,12 +49,15 @@ struct_with_invariants!{
 }
 
 impl DiskIndexTableEntry {
+    // TODO skipped this transition
     // Read, but we already know the answer(!).
     //fn read_known_cache_idx(&self, disk_idx: Ghost<nat>, config: Ghost<Config>,
 
     fn read(&self, disk_idx: Ghost<nat>) -> (cache_idx: u32)
-    requires self.wf()
-    ensures self.config.valid_cache_ref(cache_idx)
+    requires
+      self.wf()
+    ensures
+      self.config.valid_cache_ref(cache_idx)
     {
         let cache_idx = atomic_with_ghost!(
             self.atomic => load();
@@ -63,6 +66,17 @@ impl DiskIndexTableEntry {
         );
         cache_idx
     }
+
+    /*
+    fn clear_mapping(&self, disk_idx: Ghost<nat>,
+      cache_entry: Trk<CacheEntry>, status: Trk<CacheStatus>)
+      -> (cache_empty: Trk<CacheEmpty>)
+    requires
+      self.wf(),
+      status.is_Clean(),
+      cache_entry.is_CacheEntry(),
+      cache_entry.get_Entry_CacheIdx
+      */  
 }
 
 } //verus
