@@ -29,6 +29,10 @@ fn os_setup() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn main() {
+    if cfg!(debug_assertions) {
+        eprintln!("warning: verus was compiled in debug mode, which will result in worse performance");
+    }
+
     let total_time_0 = std::time::Instant::now();
 
     let _ = os_setup();
