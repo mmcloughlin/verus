@@ -15,30 +15,61 @@ The steps below walk you through compiling a Verus-specific version of rust-anal
 
 
 
+
+
 #### 2. VS Code
 
-1. Please install the rust-analyzer extension in VS Code's extensions tab.
-2. We need to change the configuration inside `settings.json`. Specifically, we need to set the two variables below.
+Before start, please install the original rust-analyzer extension in VS Code's extensions tab.
+
+
+##### 2.1. Adding a separate [VS Code Workspace](https://code.visualstudio.com/docs/editor/workspaces)
+Suppose you have a new project with `cargo new`. After you open this project in VS Code, use `File > Save Workspace As...` to generate `{project_name}.code-workspace` file. The file will look similar to this. We will be modifying "settings" section here.
+
+```
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}
+```
+
+
+##### 2.2. Adding settings variables
+Now, we will add two entries in the "settings" section of the file. 
+
 - `rust-analyzer.server.path` should be set to the path of the custom rust-analyzer binary produced in step 1 above (e.g., the full path to `./dist/rust-analyzer-x86_64-apple-darwin`)
+
 - `"rust-analyzer.checkOnSave.overrideCommand"` to the command to run Verus. 
+For `rust-analyzer.checkOnSave.overrideCommand`, the first argument needs to be the absolute path to the `verus/source/tools/rust-verify.sh` script. The second argument needs to be `${file}`, which will be replaced with the filename when the user hits the save button.
 
-For `rust-analyzer.checkOnSave.overrideCommand`, the first argument needs to be the absolute path to the `verus/source/tools/rust-verify.sh` script. The second argument needs to be `${file}`, which will be replaced with the filename when the user hits the save button. After these two, you could add additional Verus flags. For example, setting a low `rlimit` prevents long waits from Verus. Most importantly, please include `-- --error-format=json` as the last argument to make Verus output readable to rust-analyzer.
-
-For example:
+For example, the `.code-workspace` file could look the following:
 ```
-"rust-analyzer.server.path": "/Users/chanhee/Works/secure-foundations/rust-analyzer/dist/rust-analyzer-x86_64-apple-darwin", 
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+            "rust-analyzer.server.path": "/Users/chanhee/Works/secure-foundations/rust-analyzer/dist/rust-analyzer-x86_64-apple-darwin", 
 
-"rust-analyzer.checkOnSave.overrideCommand": [
-    "/Users/chanhee/Works/secure-foundations/verus/source/tools/rust-verify.sh", 
-    "${file}",   
-    // add additional flags of choice here, e.g. "--expand-errors",
-    "--rlimit",        // low rlimit is recommended to avoid long wait
-    "3",
-    "--", 
-    "--error-format=json",
-],
+            "rust-analyzer.checkOnSave.overrideCommand": [
+                "/Users/chanhee/Works/secure-foundations/verus/source/tools/rust-verify.sh", 
+                "${file}",   
+            ],
+	}
+}
 ```
 
+
+
+
+
+
+##### 2.3. VS Code in WSL
 For VS Code running in WSL, the `rust-analyzer-server.path` and
 `rust-analyzer.checkOnSave.overrideCommand` settings described above
 have to be set in two different files. The `rust-analyzer-server.path`
@@ -52,10 +83,10 @@ open this file in VS Code by pressing F1 and running the command
 `Preferences: Open User Settings (JSON)`.
 
 
-#### 3. Other IDEs
 
-Rust-analyzer's manual might be helpful (`https://rust-analyzer.github.io/manual.html`)
-When you connect Verus' rust-analyzer with another IDE, please share how to do so on this document :)
+
+#### 3. Other IDEs
+Rust-analyzer's [manual](`https://rust-analyzer.github.io/manual.html`) might be helpful to begin the setting. When you connect Verus' rust-analyzer with another IDE, please share how to do so on this document :)
 
   
 
@@ -79,10 +110,10 @@ To use IDE functionalities, please make a new project using `cargo new`, and gen
 Rust-analyzer scans the project root and all files that are reachable from the root. If the file you are working on is not reachable from the project root, most of the IDE functionalities like "goto definition" might not work. For example, if you open the `verus` repository and open up one of the examples, these functionalities might not work. 
 
 You can find more documents for IDE functionalities on the following links.
-- `Go to Definition` (https://rust-analyzer.github.io/manual.html#go-to-definition)
-- `Go to Type Declaration` (https://rust-analyzer.github.io/manual.html#go-to-type-definition)
-- `Find all References` (https://rust-analyzer.github.io/manual.html#find-all-references)
-- `Hover` (https://rust-analyzer.github.io/manual.html#hover)
+- [Go to Definition](https://rust-analyzer.github.io/manual.html#go-to-definition)
+- [Go to Type Declaration](https://rust-analyzer.github.io/manual.html#go-to-type-definition)
+- [Find all References](https://rust-analyzer.github.io/manual.html#find-all-references)
+- [Hover](https://rust-analyzer.github.io/manual.html#hover)
 
 
 #### 3.Running Verus inside the editor
@@ -131,16 +162,18 @@ This is already implemented in the original rust-analyzer. Although this is not 
 
 ## Limitations 
 General limitations are the following:
-1. This is currently experimental, and only tested using VS Code on macOS.  
-2. It is currently intended to be used only for Verus code. It could potentially produce syntax errors for correct normal Rust code.  
-
+- This is currently experimental and subject to change. Functionalities listed here are only tested using VS Code on macOS with x86 processor.   
+- It is intended to be used only for Verus code. It can produce syntax errors for correct normal Rust code. Some features of rust-analyzer might be broken or missing.  
+- An issue was reported while compiling our custom rust-analyzer on Apple Silicon Mac. As a temporary measure, running `rustup target add x86_64-apple-darwin` might help bypass the problem.
+- The current version of our fork is based on [rust-analyzer in September 2022](https://github.com/rust-lang/rust-analyzer/releases/tag/2022-09-05). If you find newer VS Code's rust-analyzer plugin not compatible, `vsix` files in the above link will be compatible to this custom binary. Alternatively, running `cargo xtask install` for compilation installs the vsix generated from the source in your machine. The compiled binary will be located at `rust-analyzer/target/release/rust-analyzer`. 
 
 #### 1.Syntax
 It can generate Verus syntax errors when the code is indeed correct. It could produce several false alarms as red squiggles. 
 
-1.1. `tracked` and `ghost` keywords are not currently handled.   
-1.2. `&&&`, `|||` is assumed to be wrapped within a pair of curly braces, and either &&& or ||| is assumed to be the outmost operator.   
-1.3. Currently, some trigger attributes are not properly handled when inside of `assume` clauses.   
+- `tracked` and `ghost` keywords are not currently handled.   
+- `&&&`, `|||` is assumed to be wrapped within a pair of curly braces, and either &&& or ||| is assumed to be the outmost operator.   
+- Currently, some trigger attributes are not properly handled when inside of `assume` clauses.   
+- The parser might be temporarily inconsistent with recent Verus syntax upgrades.
 
 
 #### 2.IDE functionalities
@@ -148,8 +181,11 @@ Information of `builtin` is currently not known to this custom rust-analyzer. Fo
 
 
 #### 3.Running Verus inside the editor
-When it runs with `expand-errors`, on `View > Problems` tab of VS Code, the localized errors and the original errors are not grouped.
-
+3.1. When it runs with `expand-errors`, on `View > Problems` tab of VS Code, the localized errors and the original errors are not grouped.
+3.2. When it tries to figure out correct arguments to pass to Verus, it currently assumes the following:
+- `main.rs` or `lib.rs` presents in the `src` as the project root.
+- Each non-root file is a module that is reachable from the project root. 
+- Each non-root file does not contain a module inside. 
 
 #### 4.Verus code actions
 4.1. It may take a few seconds for the lightbulb to be generated.   
