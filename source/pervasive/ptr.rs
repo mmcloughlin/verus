@@ -705,4 +705,20 @@ impl<V> PPtr<V> {
     }
 }
 
+impl<V: Copy> PPtr<V> {
+    #[inline(always)]
+    #[verifier(external_body)]
+    pub fn write(&self, Tracked(perm): Tracked<&mut PointsTo<V>>, in_v: V)
+        requires
+            self.id() === old(perm)@.pptr,
+            old(perm)@.value.is_Some(),
+        ensures
+            perm@.pptr === old(perm)@.pptr,
+            perm@.value === Some(in_v),
+        opens_invariants none
+    {
+        let _out = self.replace(Tracked(&mut *perm), in_v);
+    }
+}
+
 }
