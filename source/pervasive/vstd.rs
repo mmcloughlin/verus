@@ -18,6 +18,7 @@ pub mod cell;
 pub mod invariant;
 pub mod atomic;
 pub mod atomic_ghost;
+pub mod shareable_ghost;
 pub mod modes;
 pub mod layout;
 pub mod multiset;
