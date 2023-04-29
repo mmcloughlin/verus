@@ -11,7 +11,7 @@ use crate::{unsupported_err, unsupported_err_unless};
 use rustc_ast::Attribute;
 use rustc_hir::{
     def::Res, Body, BodyId, Crate, FnDecl, FnHeader, FnRetTy, FnSig, Generics, HirId, MaybeOwner,
-    MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety,
+    MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety, ExprKind,
 };
 use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::{Ident, Symbol};
@@ -33,6 +33,15 @@ pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::a
     Arc::new(pathx)
 }
 
+fn body_id_to_types<'tcx>(
+    ctxt: &Context<'tcx>,
+    id: &BodyId,
+) -> &'tcx rustc_middle::ty::TypeckResults<'tcx>
+{
+    let def = rustc_middle::ty::WithOptConstParam::unknown(id.hir_id.owner.def_id);
+    ctxt.tcx.typeck_opt_const_arg(def)
+}
+
 pub(crate) fn body_to_vir<'tcx>(
     ctxt: &Context<'tcx>,
     id: &BodyId,
@@ -40,8 +49,7 @@ pub(crate) fn body_to_vir<'tcx>(
     mode: Mode,
     external_body: bool,
 ) -> Result<vir::ast::Expr, VirErr> {
-    let def = rustc_middle::ty::WithOptConstParam::unknown(id.hir_id.owner.def_id);
-    let types = ctxt.tcx.typeck_opt_const_arg(def);
+    let types = body_id_to_types(ctxt, id);
     let bctx =
         BodyCtxt { ctxt: ctxt.clone(), types, mode, external_body, in_ghost: mode != Mode::Exec };
     expr_to_vir(&bctx, &body.value, ExprModifier::REGULAR)
@@ -165,17 +173,46 @@ pub(crate) fn check_item_fn<'tcx>(
     let path = def_id_to_vir_path(ctxt.tcx, id);
     let name = Arc::new(FunX { path: path.clone(), trait_path: trait_path.clone() });
 
+    let is_verus_spec = path.segments.last().expect("segment.last").starts_with(VERUS_SPEC);
+    let is_new_strlit =
+        ctxt.tcx.is_diagnostic_item(Symbol::intern("pervasive::string::new_strlit"), id);
+
     let vattrs = get_verifier_attrs(attrs)?;
+
+    let path = if vattrs.external_exec_specification {
+        assert!(vattrs.external_body); // TODO
+        assert!(!is_new_strlit);
+        assert!(!is_verus_spec);
+        assert!(!is_new_strlit);
+
+        if trait_path.is_some() {
+            return err_span(
+                sig.span,
+                "external_exec_specification not supported for trait functions",
+            );
+        }
+
+        let body_id = match body_id {
+            CheckItemFnEither::BodyId(body_id) => body_id,
+            _ => {
+                return err_span(
+                    sig.span,
+                    "external_exec_specification not supported for trait functions",
+                );
+            }
+        };
+        let body = find_body(ctxt, body_id);
+        let external_id = get_external_def_id(ctxt, body_id, body, sig)?;
+        def_id_to_vir_path(ctxt.tcx, external_id)
+    } else {
+        def_id_to_vir_path(ctxt.tcx, id)
+    };
 
     if vattrs.external {
         let mut erasure_info = ctxt.erasure_info.borrow_mut();
         erasure_info.external_functions.push(name);
         return Ok(None);
     }
-
-    let is_verus_spec = path.segments.last().expect("segment.last").starts_with(VERUS_SPEC);
-    let is_new_strlit =
-        ctxt.tcx.is_diagnostic_item(Symbol::intern("pervasive::string::new_strlit"), id);
 
     let mode = get_mode(Mode::Exec, attrs);
 
@@ -324,6 +361,9 @@ pub(crate) fn check_item_fn<'tcx>(
     }
     if mode != Mode::Spec && header.recommend.len() > 0 {
         return err_span(sig.span, "non-spec functions cannot have recommends");
+    }
+    if mode != Mode::Exec && vattrs.external_exec_specification {
+        return err_span(sig.span, "external_exec_specification should be 'exec'");
     }
     if header.ensure.len() > 0 {
         match (&header.ensure_id_typ, ret_typ_mode.as_ref()) {
@@ -516,6 +556,57 @@ fn is_mut_ty<'tcx>(
             None
         }
         _ => None,
+    }
+}
+
+fn get_external_def_id<'tcx>(
+    ctxt: &Context<'tcx>,
+    body_id: &BodyId,
+    body: &Body<'tcx>,
+    sig: &'tcx FnSig<'tcx>,
+) -> Result<rustc_span::def_id::DefId, VirErr>
+{
+    // Get the 'body' of this function (skipping over header if necessary)
+    let expr = match &body.value.kind {
+        ExprKind::Block(block_body, _) => {
+            match &block_body.expr {
+                Some(body_value) => body_value,
+                None => { panic!("no"); } // TODO
+            }
+        }
+        _ => {
+            &body.value
+        }
+    };
+
+    // TODO check args match the inner call
+    // TODO check type args match the inner call
+    // TODO check sigs match exactly
+    // TODO MethodCall
+    // TODO errors
+    match &expr.kind {
+        ExprKind::Call(fun, args) => {
+            match &fun.kind {
+                ExprKind::Path(qpath) => {
+                    let types = body_id_to_types(ctxt, body_id);
+                    let def = types.qpath_res(&qpath, fun.hir_id);
+                    match def {
+                        rustc_hir::def::Res::Def(_, def_id) => {
+                            Ok(def_id)
+                        }
+                        _ => {
+                            panic!("no");
+                        }
+                    }
+                }
+                _ => {
+                    panic!("no");
+                }
+            }
+        }
+        _ => {
+            panic!("no");
+        }
     }
 }
 
