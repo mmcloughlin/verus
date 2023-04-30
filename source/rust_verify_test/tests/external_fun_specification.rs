@@ -85,3 +85,95 @@ test_verify_one_file! {
         }
     } => Err(err) => assert_fails(err, 1)
 }
+
+// Test for overlap
+
+test_verify_one_file! {
+    #[test] test_overlap verus_code! {
+        #[verifier(external)]
+        fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        #[verifier(external_exec_specification)]
+        fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
+            requires x != 0,
+            ensures ret_b == !b
+        {
+            negate_bool(b, x)
+        }
+
+        #[verifier(external_exec_specification)]
+        fn negate_bool_requires_ensures2(b: bool, x: u8) -> (ret_b: bool)
+            requires x != 0,
+            ensures ret_b == !b
+        {
+            negate_bool(b, x)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "duplicate specification for `crate::negate_bool`")
+}
+
+test_verify_one_file! {
+    #[test] test_overlap2 verus_code! {
+        #[verifier(external_exec_specification)]
+        pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
+            ensures *a == *old(b), *b == *old(a),
+        {
+            std::mem::swap(a, b)
+        }
+
+        #[verifier(external_exec_specification)]
+        pub fn swap_requires_ensures2<T>(a: &mut T, b: &mut T)
+            ensures *a == *old(b), *b == *old(a),
+        {
+            std::mem::swap(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "duplicate specification for `core::mem::swap`")
+}
+
+test_verify_one_file! {
+    #[test] test_overlap3 verus_code! {
+        use vstd::*;
+
+        // This will conflict with the mem::swap specification declared in vstd
+        #[verifier(external_exec_specification)]
+        pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
+            ensures *a == *old(b), *b == *old(a),
+        {
+            std::mem::swap(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "duplicate specification for `core::mem::swap`")
+}
+
+// Test sane error message if you call a proxy
+
+test_verify_one_file! {
+    #[test] test_call_proxy verus_code! {
+        #[verifier(external)]
+        fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        #[verifier(external_exec_specification)]
+        fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
+            requires x != 0,
+            ensures ret_b == !b
+        {
+            negate_bool(b, x)
+        }
+
+        fn test() {
+            negate_bool_requires_ensures(false, 1);
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_exec_specification` directly; call `negate_bool` instead")
+}
+
+test_verify_one_file! {
+    #[test] test_call_proxy2 verus_code! {
+        fn test() {
+            let x: u8 = 5;
+            let y: u8 = 7;
+            vstd::std_specs::core::ex_swap(&mut x, &mut y);
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_exec_specification` directly; call `core::mem::swap` instead")
+}
