@@ -178,37 +178,10 @@ test_verify_one_file! {
     } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `core::mem::swap` instead")
 }
 
-// Recommends checking
-// TODO do we have a way to write tests about 'recommends' right now?
-
-test_verify_one_file! {
-    #[ignore] #[test] test_recommends verus_code! {
-        #[verifier(external)]
-        fn negate_bool(b: bool, x: u8) -> bool {
-            !b
-        }
-
-        spec fn foo(x: u8)
-            recommends x > 10,
-        {
-            true
-        }
-
-        #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
-            requires x != 0,
-                foo(x), // should be a recommends failure
-            ensures ret_b == !b
-        {
-            negate_bool(b, x)
-        }
-    } => Err(err) => assert_vir_error_msg(err, "recommends failure")
-}
-
 // If you wrongly try to apply a mode
 
 test_verify_one_file! {
-    #[ignore] #[test] test_proxy_marked_spec verus_code! {
+    #[test] test_proxy_marked_spec verus_code! {
         #[verifier(external)]
         fn negate_bool(b: bool, x: u8) -> bool {
             !b
@@ -224,7 +197,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[ignore] #[test] test_proxy_marked_proof verus_code! {
+    #[test] test_proxy_marked_proof verus_code! {
         #[verifier(external)]
         fn negate_bool(b: bool, x: u8) -> bool {
             !b
@@ -237,4 +210,298 @@ test_verify_one_file! {
             negate_bool(b, x)
         }
     } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` cannot be marked `proof`")
+}
+
+// test visibility stuff
+
+test_verify_one_file! {
+    #[test] test_refers_to_closed_fn verus_code! {
+        mod X {
+            pub closed spec fn foo(b: bool, x: u8) -> bool {
+                b && x == 0
+            }
+
+            #[verifier(external_fn_specification)]
+            pub fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+                requires foo(b, x)
+            {
+                crate::negate_bool(b, x)
+            }
+        }
+
+        #[verifier(external)]
+        pub fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        pub fn test() {
+            // this should fail because foo is closed
+            negate_bool(true, 0); // FAILS
+        }
+    } => Err(err) => assert_fails(err, 1)
+}
+
+test_verify_one_file! {
+    #[test] test_refers_to_open_fn verus_code! {
+        mod X {
+            pub open spec fn foo(b: bool, x: u8) -> bool {
+                b && x == 0
+            }
+
+            #[verifier(external_fn_specification)]
+            pub fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+                requires foo(b, x)
+            {
+                crate::negate_bool(b, x)
+            }
+        }
+
+        #[verifier(external)]
+        pub fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        pub fn test() {
+            negate_bool(true, 0);
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_refers_to_private_fn verus_code! {
+        mod X {
+            fn foo(b: bool, x: u8) -> bool {
+                b && x == 0
+            }
+
+            #[verifier(external_fn_specification)]
+            pub fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+                requires foo(b, x)
+            {
+                negate_bool(b, x)
+            }
+
+            #[verifier(external)]
+            pub fn negate_bool(b: bool, x: u8) -> bool {
+                !b
+            }
+        }
+    } => Err(err) => assert_vir_error_msg(err, "public function requires cannot refer to private items")
+}
+
+test_verify_one_file! {
+    #[test] test_proxy_is_more_private verus_code! {
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+        {
+            negate_bool(b, x)
+        }
+
+        #[verifier(external)]
+        pub fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for")
+}
+
+test_verify_one_file! {
+    #[test] test_proxy_is_more_private2 verus_code! {
+        mod X {
+            #[verifier(external_fn_specification)]
+            pub fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+            {
+                crate::Y::negate_bool(b, x)
+            }
+        }
+
+        pub mod Y {
+            #[verifier(external)]
+            pub fn negate_bool(b: bool, x: u8) -> bool {
+                !b
+            }
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for")
+}
+
+test_verify_one_file! {
+    #[test] test_proxy_is_more_private3 verus_code! {
+        #[verifier(external_fn_specification)]
+        fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
+            ensures *a == *old(b), *b == *old(a),
+        {
+            std::mem::swap(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for")
+}
+
+// Test the attribute in weird places
+
+test_verify_one_file! {
+    #[test] test_attr_on_const verus_code! {
+        #[verifier(external_fn_specification)]
+        const x: u8 = 5;
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+
+test_verify_one_file! {
+    #[test] test_attr_on_struct verus_code! {
+        #[verifier(external_fn_specification)]
+        struct X { }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_impl verus_code! {
+        struct X { }
+
+        #[verifier(external_fn_specification)]
+        impl X { }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_trait verus_code! {
+        #[verifier(external_fn_specification)]
+        trait Tr { }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_member_function verus_code! {
+        struct X { }
+
+        impl X {
+            #[verifier(external_fn_specification)]
+            fn stuff(&self) { }
+        }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_assoc_function verus_code! {
+        struct X { }
+
+        impl X {
+            #[verifier(external_fn_specification)]
+            fn stuff() { }
+        }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_foreign_function verus_code! {
+        extern "C" {
+            #[verifier(external_fn_specification)]
+            fn stuff();
+        }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+// Mismatched type signatures
+
+test_verify_one_file! {
+    #[test] mixed_up_params verus_code! {
+        #[verifier(external)]
+        fn or_bools(b: bool, c: bool) -> bool {
+            b || c
+        }
+
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, c: bool) -> (ret_b: bool)
+            ensures ret_b == b || c
+        {
+            or_bools(c, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "params do not match")
+}
+
+test_verify_one_file! {
+    #[test] wrong_num_params verus_code! {
+        #[verifier(external)]
+        fn or_bools(b: bool, c: bool) -> bool {
+            b || c
+        }
+
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, c: bool) -> (ret_b: bool)
+            ensures ret_b == b || c
+        {
+            or_bools(b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "params do not match")
+}
+
+test_verify_one_file! {
+    #[test] wrong_num_params2 verus_code! {
+        #[verifier(external)]
+        fn or_bools(b: bool, c: bool) -> bool {
+            b || c
+        }
+
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, c: bool) -> (ret_b: bool)
+            ensures ret_b == b || c
+        {
+            or_bools(b, c, c)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "params do not match")
+}
+
+test_verify_one_file! {
+    #[test] extra_trait_bound verus_code! {
+        #[verifier(external_fn_specification)]
+        fn swap_requires_ensures<T: Copy>(a: &mut T, b: &mut T)
+        {
+            core::mem::swap(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "extra trait bound")
+}
+
+test_verify_one_file! {
+    #[test] extra_trait_bound2 verus_code! {
+        #[verifier(external)]
+        fn sw(a: &mut T, b: &mut T) {
+        }
+
+        #[verifier(external_fn_specification)]
+        fn swap_requires_ensures<T: Copy>(a: &mut T, b: &mut T)
+        {
+            sw(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "extra trait bound")
+}
+
+// Lifetime checking
+
+test_verify_one_file! {
+    #[test] checking_lifetime verus_code! {
+        use vstd::*;
+        fn main(x: u8) {
+            let mut a = x;
+            core::mem::swap(&mut a, &mut a);
+        }
+    } => Err(err) => assert_rust_error_msg(err, "cannot borrow `a` as mutable more than once at a time")
+}
+
+test_verify_one_file! {
+    #[test] checking_lifetime2 verus_code! {
+        #[verifier(external)]
+        fn foo<'a>(b: &'a bool) -> &'a bool {
+            b
+        }
+
+        #[verifier(external_fn_specification)]
+        fn foo_requires_ensures<'a>(b: &'a bool) -> &'a bool
+        {
+            foo(b)
+        }
+
+        fn test() {
+            let mut x: bool = true;
+            let y = foo(&x);
+            x = false;
+            foo(y);
+        }
+    } => Err(err) => assert_rust_error_msg(err, "cannot assign to `x` because it is borrowed")
 }
