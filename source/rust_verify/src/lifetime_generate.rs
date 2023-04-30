@@ -1888,7 +1888,7 @@ pub(crate) fn gen_check_tracked_lifetimes<'tcx>(
                             );
                         }
                         ItemKind::Fn(sig, _generics, body_id) => {
-                            if !vattrs.external_exec_specification {
+                            if !vattrs.external_fn_specification {
                                 erase_fn(
                                     krate,
                                     &mut ctxt,

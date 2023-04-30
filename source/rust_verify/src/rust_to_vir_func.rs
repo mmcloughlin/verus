@@ -179,7 +179,7 @@ pub(crate) fn check_item_fn<'tcx>(
 
     let vattrs = get_verifier_attrs(attrs)?;
 
-    let (path, proxy, visibility) = if vattrs.external_exec_specification {
+    let (path, proxy, visibility) = if vattrs.external_fn_specification {
         // This function is the proxy, and we need to look up the actual path.
 
         assert!(vattrs.external_body); // TODO
@@ -191,7 +191,7 @@ pub(crate) fn check_item_fn<'tcx>(
         if trait_path.is_some() {
             return err_span(
                 sig.span,
-                "external_exec_specification not supported for trait functions",
+                "external_fn_specification not supported for trait functions",
             );
         }
 
@@ -200,7 +200,7 @@ pub(crate) fn check_item_fn<'tcx>(
             _ => {
                 return err_span(
                     sig.span,
-                    "external_exec_specification not supported for trait functions",
+                    "external_fn_specification not supported for trait functions",
                 );
             }
         };
@@ -217,7 +217,7 @@ pub(crate) fn check_item_fn<'tcx>(
         if !visibility.is_at_least_as_visible_as(&external_item_visibility) {
             return err_span(
                 sig.span,
-                "a function marked `external_exec_specification` must be at least as visible as the function it provides a spec for"
+                "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for"
             );
         }
 
@@ -384,8 +384,8 @@ pub(crate) fn check_item_fn<'tcx>(
     if mode != Mode::Spec && header.recommend.len() > 0 {
         return err_span(sig.span, "non-spec functions cannot have recommends");
     }
-    if mode != Mode::Exec && vattrs.external_exec_specification {
-        return err_span(sig.span, "external_exec_specification should be 'exec'");
+    if mode != Mode::Exec && vattrs.external_fn_specification {
+        return err_span(sig.span, "external_fn_specification should be 'exec'");
     }
     if header.ensure.len() > 0 {
         match (&header.ensure_id_typ, ret_typ_mode.as_ref()) {
@@ -648,10 +648,10 @@ pub(crate) fn check_item_const<'tcx>(
     let mode = get_mode(Mode::Exec, attrs);
     let vattrs = get_verifier_attrs(attrs)?;
 
-    if vattrs.external_exec_specification {
+    if vattrs.external_fn_specification {
         return err_span(
             span,
-            "external_exec_specification not yet supported for const",
+            "external_fn_specification not yet supported for const",
         );
     }
 
@@ -721,10 +721,10 @@ pub(crate) fn check_foreign_item_fn<'tcx>(
     let fuel = get_fuel(&vattrs);
     let mut vir_params: Vec<vir::ast::Param> = Vec::new();
 
-    if vattrs.external_exec_specification {
+    if vattrs.external_fn_specification {
         return err_span(
             span,
-            "external_exec_specification not supported on foreign items",
+            "external_fn_specification not supported on foreign items",
         );
     }
 

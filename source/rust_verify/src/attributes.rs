@@ -387,7 +387,7 @@ pub(crate) fn parse_attrs(attrs: &[Attribute]) -> Result<Vec<Attr>, VirErr> {
                 }
                 AttrTree::Fun(_, arg, None) if arg == "memoize" => v.push(Attr::Memoize),
                 AttrTree::Fun(_, arg, None) if arg == "truncate" => v.push(Attr::Truncate),
-                AttrTree::Fun(_, arg, None) if arg == "external_exec_specification" => {
+                AttrTree::Fun(_, arg, None) if arg == "external_fn_specification" => {
                      v.push(Attr::ExternalExecSpecification)
                 }
                 _ => return err_span(span, "unrecognized verifier attribute"),
@@ -604,7 +604,7 @@ pub(crate) struct VerifierAttrs {
     pub(crate) spinoff_prover: bool,
     pub(crate) memoize: bool,
     pub(crate) truncate: bool,
-    pub(crate) external_exec_specification: bool,
+    pub(crate) external_fn_specification: bool,
 }
 
 pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, VirErr> {
@@ -633,7 +633,7 @@ pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, V
         spinoff_prover: false,
         memoize: false,
         truncate: false,
-        external_exec_specification: false,
+        external_fn_specification: false,
     };
     for attr in parse_attrs(attrs)? {
         match attr {
@@ -641,7 +641,7 @@ pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, V
             Attr::ExternalBody => vs.external_body = true,
             Attr::External => vs.external = true,
             Attr::ExternalExecSpecification => {
-                vs.external_exec_specification = true;
+                vs.external_fn_specification = true;
                 vs.external_body = true;
             }
             Attr::Opaque => vs.opaque = true,

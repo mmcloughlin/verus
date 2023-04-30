@@ -3,7 +3,7 @@
 mod common;
 use common::*;
 
-// Use external_exec_specification on an external function from the same crate
+// Use external_fn_specification on an external function from the same crate
 
 test_verify_one_file! {
     #[test] test_basics verus_code! {
@@ -12,7 +12,7 @@ test_verify_one_file! {
             !b
         }
 
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
             requires x != 0,
             ensures ret_b == !b
@@ -36,12 +36,12 @@ test_verify_one_file! {
     } => Err(err) => assert_fails(err, 2)
 }
 
-// Apply external_exec_specification on a function from an external crate
+// Apply external_fn_specification on a function from an external crate
 // don't import vstd for this test (it would cause overlap)
 
 test_verify_one_file! {
     #[test] test_apply_spec_to_external verus_code! {
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
             ensures *a == *old(b), *b == *old(a),
         {
@@ -95,7 +95,7 @@ test_verify_one_file! {
             !b
         }
 
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
             requires x != 0,
             ensures ret_b == !b
@@ -103,7 +103,7 @@ test_verify_one_file! {
             negate_bool(b, x)
         }
 
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         fn negate_bool_requires_ensures2(b: bool, x: u8) -> (ret_b: bool)
             requires x != 0,
             ensures ret_b == !b
@@ -115,14 +115,14 @@ test_verify_one_file! {
 
 test_verify_one_file! {
     #[test] test_overlap2 verus_code! {
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
             ensures *a == *old(b), *b == *old(a),
         {
             std::mem::swap(a, b)
         }
 
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         pub fn swap_requires_ensures2<T>(a: &mut T, b: &mut T)
             ensures *a == *old(b), *b == *old(a),
         {
@@ -136,7 +136,7 @@ test_verify_one_file! {
         use vstd::*;
 
         // This will conflict with the mem::swap specification declared in vstd
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
             ensures *a == *old(b), *b == *old(a),
         {
@@ -154,7 +154,7 @@ test_verify_one_file! {
             !b
         }
 
-        #[verifier(external_exec_specification)]
+        #[verifier(external_fn_specification)]
         fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
             requires x != 0,
             ensures ret_b == !b
@@ -165,7 +165,7 @@ test_verify_one_file! {
         fn test() {
             negate_bool_requires_ensures(false, 1);
         }
-    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_exec_specification` directly; call `negate_bool` instead")
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `negate_bool` instead")
 }
 
 test_verify_one_file! {
@@ -175,5 +175,66 @@ test_verify_one_file! {
             let y: u8 = 7;
             vstd::std_specs::core::ex_swap(&mut x, &mut y);
         }
-    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_exec_specification` directly; call `core::mem::swap` instead")
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `core::mem::swap` instead")
+}
+
+// Recommends checking
+// TODO do we have a way to write tests about 'recommends' right now?
+
+test_verify_one_file! {
+    #[ignore] #[test] test_recommends verus_code! {
+        #[verifier(external)]
+        fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        spec fn foo(x: u8)
+            recommends x > 10,
+        {
+            true
+        }
+
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, x: u8) -> (ret_b: bool)
+            requires x != 0,
+                foo(x), // should be a recommends failure
+            ensures ret_b == !b
+        {
+            negate_bool(b, x)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "recommends failure")
+}
+
+// If you wrongly try to apply a mode
+
+test_verify_one_file! {
+    #[ignore] #[test] test_proxy_marked_spec verus_code! {
+        #[verifier(external)]
+        fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        #[spec]
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+        {
+            negate_bool(b, x)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` cannot be marked `spec`")
+}
+
+test_verify_one_file! {
+    #[ignore] #[test] test_proxy_marked_proof verus_code! {
+        #[verifier(external)]
+        fn negate_bool(b: bool, x: u8) -> bool {
+            !b
+        }
+
+        #[proof]
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+        {
+            negate_bool(b, x)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` cannot be marked `proof`")
 }

@@ -751,7 +751,7 @@ fn check_functions_match(
 /// Construct an error message for when our Krate has two functions of the same name.
 /// If this happen it's probably either:
 ///  (i) an issue with our conversion from rust paths to VIR paths not being injective
-///  (ii) the user's use of `external_exec_specification` resulting in overlap
+///  (ii) the user's use of `external_fn_specification` resulting in overlap
 fn func_conflict_error(
     function1: &Function,
     function2: &Function,
@@ -761,7 +761,7 @@ fn func_conflict_error(
             Some(proxy) => {
                 err.primary_label(
                     &proxy.span,
-                    "specification declared via `external_exec_specification`")
+                    "specification declared via `external_fn_specification`")
             }
             None => {
                 err.primary_label(
