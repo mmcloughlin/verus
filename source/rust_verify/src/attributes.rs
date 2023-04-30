@@ -640,10 +640,7 @@ pub(crate) fn get_verifier_attrs(attrs: &[Attribute]) -> Result<VerifierAttrs, V
             Attr::VerusMacro => vs.verus_macro = true,
             Attr::ExternalBody => vs.external_body = true,
             Attr::External => vs.external = true,
-            Attr::ExternalExecSpecification => {
-                vs.external_fn_specification = true;
-                vs.external_body = true;
-            }
+            Attr::ExternalExecSpecification => vs.external_fn_specification = true,
             Attr::Opaque => vs.opaque = true,
             Attr::Publish => vs.publish = true,
             Attr::OpaqueOutsideModule => vs.opaque_outside_module = true,

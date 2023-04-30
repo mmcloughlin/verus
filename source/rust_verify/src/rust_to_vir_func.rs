@@ -199,8 +199,6 @@ pub(crate) fn check_item_fn<'tcx>(
             );
         }
 
-        assert!(vattrs.external_body); // TODO fix this
-
         if is_new_strlit {
             return err_span(
                 sig.span,
@@ -575,7 +573,7 @@ pub(crate) fn check_item_fn<'tcx>(
         is_const: false,
         publish,
         attrs: Arc::new(fattrs),
-        body: if vattrs.external_body || header.no_method_body { None } else { vir_body },
+        body: if vattrs.external_body || vattrs.external_fn_specification || header.no_method_body { None } else { vir_body },
         extra_dependencies: header.extra_dependencies,
     };
 
