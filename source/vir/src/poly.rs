@@ -675,6 +675,7 @@ fn poly_stmt(ctx: &Ctx, state: &mut State, stmt: &Stmt) -> Stmt {
 fn poly_function(ctx: &Ctx, function: &Function) -> Function {
     let FunctionX {
         name,
+        proxy,
         kind,
         visibility,
         mode: mut function_mode,
@@ -812,6 +813,7 @@ fn poly_function(ctx: &Ctx, function: &Function) -> Function {
 
     let functionx = FunctionX {
         name: name.clone(),
+        proxy: proxy.clone(),
         kind: kind.clone(),
         visibility: visibility.clone(),
         mode: function_mode,

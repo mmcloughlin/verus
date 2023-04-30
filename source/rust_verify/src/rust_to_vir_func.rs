@@ -170,20 +170,22 @@ pub(crate) fn check_item_fn<'tcx>(
     generics: &'tcx Generics,
     body_id: CheckItemFnEither<&BodyId, &[Ident]>,
 ) -> Result<Option<Fun>, VirErr> {
-    let path = def_id_to_vir_path(ctxt.tcx, id);
-    let name = Arc::new(FunX { path: path.clone(), trait_path: trait_path.clone() });
+    let this_path = def_id_to_vir_path(ctxt.tcx, id);
 
-    let is_verus_spec = path.segments.last().expect("segment.last").starts_with(VERUS_SPEC);
+    let is_verus_spec = this_path.segments.last().expect("segment.last").starts_with(VERUS_SPEC);
     let is_new_strlit =
         ctxt.tcx.is_diagnostic_item(Symbol::intern("pervasive::string::new_strlit"), id);
 
     let vattrs = get_verifier_attrs(attrs)?;
 
-    let path = if vattrs.external_exec_specification {
+    let (path, proxy) = if vattrs.external_exec_specification {
+        // This function is the proxy, and we need to look up the actual path.
+
         assert!(vattrs.external_body); // TODO
         assert!(!is_new_strlit);
         assert!(!is_verus_spec);
         assert!(!is_new_strlit);
+        assert!(!vattrs.autospec.is_some());
 
         if trait_path.is_some() {
             return err_span(
@@ -203,10 +205,15 @@ pub(crate) fn check_item_fn<'tcx>(
         };
         let body = find_body(ctxt, body_id);
         let external_id = get_external_def_id(ctxt, body_id, body, sig)?;
-        def_id_to_vir_path(ctxt.tcx, external_id)
+        let external_path = def_id_to_vir_path(ctxt.tcx, external_id);
+
+        (external_path, Some((*ctxt.spanned_new(sig.span, this_path)).clone()))
     } else {
-        def_id_to_vir_path(ctxt.tcx, id)
+        // No proxy.
+        (this_path, None)
     };
+
+    let name = Arc::new(FunX { path: path.clone(), trait_path: trait_path.clone() });
 
     if vattrs.external {
         let mut erasure_info = ctxt.erasure_info.borrow_mut();
@@ -503,6 +510,7 @@ pub(crate) fn check_item_fn<'tcx>(
 
     let func = FunctionX {
         name: name.clone(),
+        proxy,
         kind,
         visibility,
         mode,
@@ -624,6 +632,14 @@ pub(crate) fn check_item_const<'tcx>(
     let name = Arc::new(FunX { path, trait_path: None });
     let mode = get_mode(Mode::Exec, attrs);
     let vattrs = get_verifier_attrs(attrs)?;
+
+    if vattrs.external_exec_specification {
+        return err_span(
+            span,
+            "external_exec_specification not yet supported for const",
+        );
+    }
+
     let fuel = get_fuel(&vattrs);
     if vattrs.external {
         let mut erasure_info = ctxt.erasure_info.borrow_mut();
@@ -640,6 +656,7 @@ pub(crate) fn check_item_const<'tcx>(
     );
     let func = FunctionX {
         name,
+        proxy: None,
         kind: FunctionKind::Static,
         visibility,
         mode: Mode::Spec, // the function has mode spec; the mode attribute goes into ret.x.mode
@@ -689,6 +706,13 @@ pub(crate) fn check_foreign_item_fn<'tcx>(
     let fuel = get_fuel(&vattrs);
     let mut vir_params: Vec<vir::ast::Param> = Vec::new();
 
+    if vattrs.external_exec_specification {
+        return err_span(
+            span,
+            "external_exec_specification not supported on foreign items",
+        );
+    }
+
     assert!(idents.len() == inputs.len());
     for (param, input) in idents.iter().zip(inputs.iter()) {
         let name = Arc::new(foreign_param_to_var(param));
@@ -719,6 +743,7 @@ pub(crate) fn check_foreign_item_fn<'tcx>(
     let ret = ctxt.spanned_new(span, ret_param);
     let func = FunctionX {
         name,
+        proxy: None,
         kind: FunctionKind::Static,
         visibility,
         fuel,

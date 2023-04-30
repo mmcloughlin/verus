@@ -747,6 +747,36 @@ fn check_functions_match(
     Ok(())
 }
 
+/// Construct an error message for when our Krate has two functions of the same name.
+/// If this happen it's probably either:
+///  (i) an issue with our conversion from rust paths to VIR paths not being injective
+///  (ii) the user's use of `external_exec_specification` resulting in overlap
+fn func_conflict_error(
+    function1: &Function,
+    function2: &Function,
+) -> Message {
+    let add_label = |err: Message, function: &Function| {
+        match &function.x.proxy {
+            Some(proxy) => {
+                err.primary_label(
+                    &proxy.span,
+                    "specification declared via `external_exec_specification`")
+            }
+            None => {
+                err.primary_label(
+                    &function.span,
+                    "declared here (and not marked as `external`)")
+            }
+        }
+    };
+
+    let err = air::messages::error_bare(format!("duplicate specification for `{:}`",
+                crate::ast_util::path_as_rust_name(&function1.x.name.path)));
+    let err = add_label(err, function1);
+    let err = add_label(err, function2);
+    err
+}
+
 pub fn check_crate(
     krate: &Krate,
     mut crate_names: Vec<String>,
@@ -755,12 +785,11 @@ pub fn check_crate(
     crate_names.push("builtin".to_string());
     let mut funs: HashMap<Fun, Function> = HashMap::new();
     for function in krate.functions.iter() {
-        if funs.contains_key(&function.x.name) {
-            return Err(air::messages::error(
-                "not supported: multiple definitions of same function",
-                &function.span,
-            )
-            .secondary_span(&funs[&function.x.name].span));
+        match func_map.get(&function.x.name) {
+            Some(other_function) => {
+                return Err(func_conflict_error(function, other_function));
+            }
+            None => { }
         }
         funs.insert(function.x.name.clone(), function.clone());
     }

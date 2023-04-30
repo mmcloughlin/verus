@@ -56,6 +56,9 @@ pub(crate) fn def_path_to_vir_path<'tcx>(
                 krate = self_path.as_ref().unwrap().krate.clone();
                 segments = (*self_path.as_ref().unwrap().segments).clone();
             }
+            DefPathData::ForeignMod => {
+                // this segment can be ignored
+            }
             _ => return None,
         }
     }

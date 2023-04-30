@@ -694,6 +694,9 @@ pub type Function = Arc<Spanned<FunctionX>>;
 pub struct FunctionX {
     /// Name of function
     pub name: Fun,
+    /// Proxy used to declare the spec of this function
+    /// (e.g., some function marked `external_exec_specification`)
+    pub proxy: Option<Spanned<Path>>,
     /// Kind (translation to AIR is different for each different kind)
     pub kind: FunctionKind,
     /// Access control (public/private)

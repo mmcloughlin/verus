@@ -13,6 +13,7 @@ use crate::sst_to_air::fun_to_air_ident;
 use crate::util::vec_map;
 use air::ast::{Command, CommandX, Commands, DeclX, MultiOp, Span};
 use air::ast_util::str_typ;
+use air::messages::Message;
 use num_bigint::BigUint;
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -182,7 +183,6 @@ impl GlobalCtx {
             krate.datatypes.iter().map(|d| (d.x.path.clone(), d.x.variants.clone())).collect();
         let mut func_map: HashMap<Fun, Function> = HashMap::new();
         for function in krate.functions.iter() {
-            assert!(!func_map.contains_key(&function.x.name));
             func_map.insert(function.x.name.clone(), function.clone());
         }
         let mut method_map: HashMap<(Fun, Path), Fun> = HashMap::new();
