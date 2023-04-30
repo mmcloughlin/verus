@@ -11,6 +11,7 @@ use crate::early_exit_cf::assert_no_early_exit_in_inv_block;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use air::messages::Message;
 
 struct Ctxt {
     pub(crate) crate_names: Vec<String>,
@@ -785,7 +786,7 @@ pub fn check_crate(
     crate_names.push("builtin".to_string());
     let mut funs: HashMap<Fun, Function> = HashMap::new();
     for function in krate.functions.iter() {
-        match func_map.get(&function.x.name) {
+        match funs.get(&function.x.name) {
             Some(other_function) => {
                 return Err(func_conflict_error(function, other_function));
             }
