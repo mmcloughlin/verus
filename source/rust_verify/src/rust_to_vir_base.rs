@@ -70,7 +70,7 @@ pub(crate) fn def_path_to_vir_module<'tcx>(
     def_path: DefPath,
 ) -> Path {
     let multi_crate = MULTI_CRATE.with(|m| m.load(std::sync::atomic::Ordering::Relaxed));
-    let mut krate = if def_path.krate == LOCAL_CRATE && !multi_crate {
+    let krate = if def_path.krate == LOCAL_CRATE && !multi_crate {
         None
     } else {
         Some(Arc::new(tcx.crate_name(def_path.krate).to_string()))

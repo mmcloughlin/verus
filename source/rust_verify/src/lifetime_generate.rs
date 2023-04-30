@@ -193,9 +193,8 @@ impl State {
         }
     }
 
-    fn reach_fun(&mut self, ctxt: &Context, self_path: Option<Path>, id: DefId) {
+    fn reach_fun(&mut self, self_path: Option<Path>, id: DefId) {
         if id.as_local().is_none() && !self.reached.contains(&(self_path.clone(), id)) {
-            let crate_name = ctxt.tcx.crate_name(ctxt.tcx.def_path(id).krate).to_string();
             self.reached.insert((self_path.clone(), id));
             self.imported_fun_worklist.push((self_path, id));
         }
@@ -600,7 +599,7 @@ fn erase_call<'tcx>(
             if f.x.mode == Mode::Spec {
                 return None;
             }
-            state.reach_fun(ctxt, self_path, fn_def_id.expect("call id"));
+            state.reach_fun(self_path, fn_def_id.expect("call id"));
             let typ_args = mk_typ_args(ctxt, state, node_substs);
             let mut exps: Vec<Exp> = Vec::new();
             let mut is_first: bool = true;
