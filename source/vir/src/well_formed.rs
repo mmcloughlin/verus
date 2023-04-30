@@ -8,10 +8,10 @@ use crate::ast_util::{
 use crate::datatype_to_air::is_datatype_transparent;
 use crate::def::user_local_name;
 use crate::early_exit_cf::assert_no_early_exit_in_inv_block;
+use air::messages::Message;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use air::messages::Message;
 
 struct Ctxt {
     pub(crate) crate_names: Vec<String>,
@@ -752,27 +752,18 @@ fn check_functions_match(
 /// If this happen it's probably either:
 ///  (i) an issue with our conversion from rust paths to VIR paths not being injective
 ///  (ii) the user's use of `external_fn_specification` resulting in overlap
-fn func_conflict_error(
-    function1: &Function,
-    function2: &Function,
-) -> Message {
-    let add_label = |err: Message, function: &Function| {
-        match &function.x.proxy {
-            Some(proxy) => {
-                err.primary_label(
-                    &proxy.span,
-                    "specification declared via `external_fn_specification`")
-            }
-            None => {
-                err.primary_label(
-                    &function.span,
-                    "declared here (and not marked as `external`)")
-            }
+fn func_conflict_error(function1: &Function, function2: &Function) -> Message {
+    let add_label = |err: Message, function: &Function| match &function.x.proxy {
+        Some(proxy) => {
+            err.primary_label(&proxy.span, "specification declared via `external_fn_specification`")
         }
+        None => err.primary_label(&function.span, "declared here (and not marked as `external`)"),
     };
 
-    let err = air::messages::error_bare(format!("duplicate specification for `{:}`",
-                crate::ast_util::path_as_rust_name(&function1.x.name.path)));
+    let err = air::messages::error_bare(format!(
+        "duplicate specification for `{:}`",
+        crate::ast_util::path_as_rust_name(&function1.x.name.path)
+    ));
     let err = add_label(err, function1);
     let err = add_label(err, function2);
     err
@@ -790,7 +781,7 @@ pub fn check_crate(
             Some(other_function) => {
                 return Err(func_conflict_error(function, other_function));
             }
-            None => { }
+            None => {}
         }
         funs.insert(function.x.name.clone(), function.clone());
     }

@@ -2,6 +2,7 @@ use crate::attributes::{
     get_fuel, get_mode, get_publish, get_ret_mode, get_var_mode, get_verifier_attrs,
 };
 use crate::context::{BodyCtxt, Context};
+use crate::rust_to_vir_base::mk_visibility;
 use crate::rust_to_vir_base::{
     check_generics_bounds_fun, def_id_to_vir_path, foreign_param_to_var, mid_ty_to_vir,
 };
@@ -10,8 +11,8 @@ use crate::util::{err_span, unsupported_err_span};
 use crate::{unsupported_err, unsupported_err_unless};
 use rustc_ast::Attribute;
 use rustc_hir::{
-    def::Res, Body, BodyId, Crate, FnDecl, FnHeader, FnRetTy, FnSig, Generics, HirId, MaybeOwner,
-    MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety, ExprKind,
+    def::Res, Body, BodyId, Crate, ExprKind, FnDecl, FnHeader, FnRetTy, FnSig, Generics, HirId,
+    MaybeOwner, MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety,
 };
 use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::{Ident, Symbol};
@@ -23,7 +24,6 @@ use vir::ast::{
     ParamX, Typ, TypX, VirErr,
 };
 use vir::def::{RETURN_VALUE, VERUS_SPEC};
-use crate::rust_to_vir_base::mk_visibility;
 
 pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::ast::Path {
     // turn a::b::c into a::b::method_name
@@ -37,8 +37,7 @@ pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::a
 fn body_id_to_types<'tcx>(
     tcx: TyCtxt<'tcx>,
     id: &BodyId,
-) -> &'tcx rustc_middle::ty::TypeckResults<'tcx>
-{
+) -> &'tcx rustc_middle::ty::TypeckResults<'tcx> {
     let def = rustc_middle::ty::WithOptConstParam::unknown(id.hir_id.owner.def_id);
     tcx.typeck_opt_const_arg(def)
 }
@@ -186,23 +185,18 @@ pub(crate) fn check_item_fn<'tcx>(
         if mode != Mode::Exec {
             return err_span(
                 sig.span,
-                format!(
-                    "a function marked `external_fn_specification` cannot be marked `{mode:}`",
-                )
+                format!("a function marked `external_fn_specification` cannot be marked `{mode:}`",),
             );
         }
 
         if self_generics.is_some() {
-            return err_span(
-                sig.span,
-                "`external_fn_specification` attribute not supported here"
-            );
+            return err_span(sig.span, "`external_fn_specification` attribute not supported here");
         }
 
         if is_new_strlit {
             return err_span(
                 sig.span,
-                "`external_fn_specification` attribute not supported with new_strlit"
+                "`external_fn_specification` attribute not supported with new_strlit",
             );
         }
 
@@ -216,14 +210,14 @@ pub(crate) fn check_item_fn<'tcx>(
         if is_verus_spec {
             return err_span(
                 sig.span,
-                "`external_fn_specification` attribute not supported with VERUS_SPEC"
+                "`external_fn_specification` attribute not supported with VERUS_SPEC",
             );
         }
 
         if vattrs.autospec.is_some() {
             return err_span(
                 sig.span,
-                "`external_fn_specification` attribute not yet supported with `when_used_as_spec`"
+                "`external_fn_specification` attribute not yet supported with `when_used_as_spec`",
             );
         }
 
@@ -241,15 +235,17 @@ pub(crate) fn check_item_fn<'tcx>(
         let external_id = get_external_def_id(ctxt.tcx, body_id, body, sig)?;
         let external_path = def_id_to_vir_path(ctxt.tcx, external_id);
 
-        let owning_module_of_external_item = crate::rust_to_vir_base::def_id_to_vir_module(ctxt.tcx, external_id);
+        let owning_module_of_external_item =
+            crate::rust_to_vir_base::def_id_to_vir_module(ctxt.tcx, external_id);
         let external_item_visibility = mk_visibility(
             ctxt,
             &Some(owning_module_of_external_item), // REVIEW should this ever be None? what's owning module None mean?
-            external_id);
+            external_id,
+        );
         if !visibility.is_at_least_as_visible_as(&external_item_visibility) {
             return err_span(
                 sig.span,
-                "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for"
+                "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for",
             );
         }
 
@@ -573,7 +569,11 @@ pub(crate) fn check_item_fn<'tcx>(
         is_const: false,
         publish,
         attrs: Arc::new(fattrs),
-        body: if vattrs.external_body || vattrs.external_fn_specification || header.no_method_body { None } else { vir_body },
+        body: if vattrs.external_body || vattrs.external_fn_specification || header.no_method_body {
+            None
+        } else {
+            vir_body
+        },
         extra_dependencies: header.extra_dependencies,
     };
 
@@ -617,19 +617,18 @@ pub(crate) fn get_external_def_id<'tcx>(
     body_id: &BodyId,
     body: &Body<'tcx>,
     sig: &'tcx FnSig<'tcx>,
-) -> Result<rustc_span::def_id::DefId, VirErr>
-{
+) -> Result<rustc_span::def_id::DefId, VirErr> {
     // Get the 'body' of this function (skipping over header if necessary)
     let expr = match &body.value.kind {
         ExprKind::Block(block_body, _) => {
             match &block_body.expr {
                 Some(body_value) => body_value,
-                None => { panic!("no"); } // TODO
+                None => {
+                    panic!("no");
+                } // TODO
             }
         }
-        _ => {
-            &body.value
-        }
+        _ => &body.value,
     };
 
     // TODO check args match the inner call
@@ -638,25 +637,21 @@ pub(crate) fn get_external_def_id<'tcx>(
     // TODO MethodCall
     // TODO errors
     match &expr.kind {
-        ExprKind::Call(fun, args) => {
-            match &fun.kind {
-                ExprKind::Path(qpath) => {
-                    let types = body_id_to_types(tcx, body_id);
-                    let def = types.qpath_res(&qpath, fun.hir_id);
-                    match def {
-                        rustc_hir::def::Res::Def(_, def_id) => {
-                            Ok(def_id)
-                        }
-                        _ => {
-                            panic!("no");
-                        }
+        ExprKind::Call(fun, args) => match &fun.kind {
+            ExprKind::Path(qpath) => {
+                let types = body_id_to_types(tcx, body_id);
+                let def = types.qpath_res(&qpath, fun.hir_id);
+                match def {
+                    rustc_hir::def::Res::Def(_, def_id) => Ok(def_id),
+                    _ => {
+                        panic!("no");
                     }
                 }
-                _ => {
-                    panic!("no");
-                }
             }
-        }
+            _ => {
+                panic!("no");
+            }
+        },
         _ => {
             panic!("no");
         }
@@ -679,10 +674,7 @@ pub(crate) fn check_item_const<'tcx>(
     let vattrs = get_verifier_attrs(attrs)?;
 
     if vattrs.external_fn_specification {
-        return err_span(
-            span,
-            "`external_fn_specification` attribute not yet supported for const",
-        );
+        return err_span(span, "`external_fn_specification` attribute not yet supported for const");
     }
 
     let fuel = get_fuel(&vattrs);

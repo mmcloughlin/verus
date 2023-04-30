@@ -269,8 +269,8 @@ impl Visibility {
                     Some(p2) => {
                         // Check if p is a subpath of p2
                         p.krate == p2.krate
-                        && p.segments.len() <= p2.segments.len()
-                        && &*p.segments == &p2.segments[0 .. p.segments.len()]
+                            && p.segments.len() <= p2.segments.len()
+                            && &*p.segments == &p2.segments[0..p.segments.len()]
                     }
                     None => {
                         // 'other' is maximally pub, but 'self' is not, so no

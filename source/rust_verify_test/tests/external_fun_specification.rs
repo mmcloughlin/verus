@@ -341,7 +341,6 @@ test_verify_one_file! {
     } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not yet supported for const")
 }
 
-
 test_verify_one_file! {
     #[test] test_attr_on_struct verus_code! {
         #[verifier(external_fn_specification)]

@@ -5,6 +5,7 @@ use crate::rust_to_vir_base::{
     mid_ty_to_vir, mk_visibility,
 };
 use crate::unsupported_err_unless;
+use crate::util::err_span;
 use crate::util::unsupported_err_span;
 use air::ast_util::str_ident;
 use rustc_ast::Attribute;
@@ -15,7 +16,6 @@ use std::sync::Arc;
 use vir::ast::{DatatypeTransparency, DatatypeX, Ident, KrateX, Mode, Path, Variant, VirErr};
 use vir::ast_util::ident_binder;
 use vir::def::positional_field_ident;
-use crate::util::err_span;
 
 fn check_variant_data<'tcx, 'fd>(
     span: Span,
@@ -131,10 +131,7 @@ pub fn check_item_struct<'tcx>(
     let vattrs = get_verifier_attrs(attrs)?;
 
     if vattrs.external_fn_specification {
-        return err_span(
-            span,
-            "`external_fn_specification` attribute not supported here"
-        );
+        return err_span(span, "`external_fn_specification` attribute not supported here");
     }
 
     let def_id = id.owner_id.to_def_id();
@@ -197,10 +194,7 @@ pub fn check_item_enum<'tcx>(
     let vattrs = get_verifier_attrs(attrs)?;
 
     if vattrs.external_fn_specification {
-        return err_span(
-            span,
-            "`external_fn_specification` attribute not supported here"
-        );
+        return err_span(span, "`external_fn_specification` attribute not supported here");
     }
 
     let def_id = id.owner_id.to_def_id();

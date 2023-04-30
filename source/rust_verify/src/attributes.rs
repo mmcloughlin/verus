@@ -388,7 +388,7 @@ pub(crate) fn parse_attrs(attrs: &[Attribute]) -> Result<Vec<Attr>, VirErr> {
                 AttrTree::Fun(_, arg, None) if arg == "memoize" => v.push(Attr::Memoize),
                 AttrTree::Fun(_, arg, None) if arg == "truncate" => v.push(Attr::Truncate),
                 AttrTree::Fun(_, arg, None) if arg == "external_fn_specification" => {
-                     v.push(Attr::ExternalExecSpecification)
+                    v.push(Attr::ExternalExecSpecification)
                 }
                 _ => return err_span(span, "unrecognized verifier attribute"),
             },

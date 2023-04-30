@@ -65,10 +65,7 @@ pub(crate) fn def_path_to_vir_path<'tcx>(
     Some(Arc::new(PathX { krate, segments: Arc::new(segments) }))
 }
 
-pub(crate) fn def_path_to_vir_module<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    def_path: DefPath,
-) -> Path {
+pub(crate) fn def_path_to_vir_module<'tcx>(tcx: TyCtxt<'tcx>, def_path: DefPath) -> Path {
     let multi_crate = MULTI_CRATE.with(|m| m.load(std::sync::atomic::Ordering::Relaxed));
     let krate = if def_path.krate == LOCAL_CRATE && !multi_crate {
         None
@@ -88,10 +85,7 @@ pub(crate) fn def_path_to_vir_module<'tcx>(
     Arc::new(PathX { krate, segments: Arc::new(segments) })
 }
 
-pub(crate) fn def_id_to_vir_module<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    def_id: DefId,
-) -> Path {
+pub(crate) fn def_id_to_vir_module<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> Path {
     def_path_to_vir_module(tcx, tcx.def_path(def_id))
 }
 
