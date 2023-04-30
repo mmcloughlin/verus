@@ -34,12 +34,12 @@ pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::a
 }
 
 fn body_id_to_types<'tcx>(
-    ctxt: &Context<'tcx>,
+    tcx: TyCtxt<'tcx>,
     id: &BodyId,
 ) -> &'tcx rustc_middle::ty::TypeckResults<'tcx>
 {
     let def = rustc_middle::ty::WithOptConstParam::unknown(id.hir_id.owner.def_id);
-    ctxt.tcx.typeck_opt_const_arg(def)
+    tcx.typeck_opt_const_arg(def)
 }
 
 pub(crate) fn body_to_vir<'tcx>(
@@ -49,7 +49,7 @@ pub(crate) fn body_to_vir<'tcx>(
     mode: Mode,
     external_body: bool,
 ) -> Result<vir::ast::Expr, VirErr> {
-    let types = body_id_to_types(ctxt, id);
+    let types = body_id_to_types(ctxt.tcx, id);
     let bctx =
         BodyCtxt { ctxt: ctxt.clone(), types, mode, external_body, in_ghost: mode != Mode::Exec };
     expr_to_vir(&bctx, &body.value, ExprModifier::REGULAR)
@@ -203,8 +203,9 @@ pub(crate) fn check_item_fn<'tcx>(
                 );
             }
         };
+
         let body = find_body(ctxt, body_id);
-        let external_id = get_external_def_id(ctxt, body_id, body, sig)?;
+        let external_id = get_external_def_id(ctxt.tcx, body_id, body, sig)?;
         let external_path = def_id_to_vir_path(ctxt.tcx, external_id);
 
         (external_path, Some((*ctxt.spanned_new(sig.span, this_path)).clone()))
@@ -567,8 +568,8 @@ fn is_mut_ty<'tcx>(
     }
 }
 
-fn get_external_def_id<'tcx>(
-    ctxt: &Context<'tcx>,
+pub(crate) fn get_external_def_id<'tcx>(
+    tcx: TyCtxt<'tcx>,
     body_id: &BodyId,
     body: &Body<'tcx>,
     sig: &'tcx FnSig<'tcx>,
@@ -596,7 +597,7 @@ fn get_external_def_id<'tcx>(
         ExprKind::Call(fun, args) => {
             match &fun.kind {
                 ExprKind::Path(qpath) => {
-                    let types = body_id_to_types(ctxt, body_id);
+                    let types = body_id_to_types(tcx, body_id);
                     let def = types.qpath_res(&qpath, fun.hir_id);
                     match def {
                         rustc_hir::def::Res::Def(_, def_id) => {

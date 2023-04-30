@@ -1890,19 +1890,31 @@ pub(crate) fn gen_check_tracked_lifetimes<'tcx>(
                             );
                         }
                         ItemKind::Fn(sig, _generics, body_id) => {
-                            erase_fn(
-                                krate,
-                                &mut ctxt,
-                                &mut state,
-                                item.ident.span,
-                                id,
-                                sig,
-                                None,
-                                None,
-                                false,
-                                vattrs.external_body,
-                                Some(body_id),
-                            );
+                            if !vattrs.external_exec_specification {
+                                erase_fn(
+                                    krate,
+                                    &mut ctxt,
+                                    &mut state,
+                                    item.ident.span,
+                                    id,
+                                    sig,
+                                    None,
+                                    None,
+                                    false,
+                                    vattrs.external_body,
+                                    Some(body_id),
+                                );
+                            } else {
+                                let body = ctxt.tcx.hir().body(*body_id);
+                                let def_id = crate::rust_to_vir_func::get_external_def_id(
+                                    ctxt.tcx, body_id, body, sig).unwrap();
+                                    
+                                import_fn(
+                                    &mut ctxt,
+                                    &mut state,
+                                    None,
+                                    def_id);
+                            }
                         }
                         ItemKind::Trait(
                             IsAuto::No,
