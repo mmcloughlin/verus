@@ -42,7 +42,7 @@ test_verify_one_file! {
 test_verify_one_file! {
     #[test] test_apply_spec_to_external verus_code! {
         #[verifier(external_exec_specification)]
-        fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
+        pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
             ensures *a == *old(b), *b == *old(a),
         {
             std::mem::swap(a, b)

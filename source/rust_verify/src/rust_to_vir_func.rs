@@ -212,7 +212,7 @@ pub(crate) fn check_item_fn<'tcx>(
         let owning_module_of_external_item = crate::rust_to_vir_base::def_id_to_vir_module(ctxt.tcx, external_id);
         let external_item_visibility = mk_visibility(
             ctxt,
-            &Some(owning_module_of_external_item), // REVIEW should this ever be None?
+            &Some(owning_module_of_external_item), // REVIEW should this ever be None? what's owning module None mean?
             external_id);
         if !visibility.is_at_least_as_visible_as(&external_item_visibility) {
             return err_span(
