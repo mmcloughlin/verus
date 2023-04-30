@@ -257,6 +257,29 @@ impl Visibility {
     pub(crate) fn is_private(&self) -> bool {
         self.owning_module.is_some() && self.owning_module == self.restricted_to
     }
+
+    pub fn is_at_least_as_visible_as(&self, other: &Visibility) -> bool {
+        match &self.restricted_to {
+            None => {
+                // self is maximally pub, so yes
+                true
+            }
+            Some(p) => {
+                match &other.restricted_to {
+                    Some(p2) => {
+                        // Check if p is a subpath of p2
+                        p.krate == p2.krate
+                        && p.segments.len() <= p2.segments.len()
+                        && &*p.segments == &p2.segments[0 .. p.segments.len()]
+                    }
+                    None => {
+                        // 'other' is maximally pub, but 'self' is not, so no
+                        false
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<X> SpannedTyped<X> {

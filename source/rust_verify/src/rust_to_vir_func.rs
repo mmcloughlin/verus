@@ -23,6 +23,7 @@ use vir::ast::{
     ParamX, Typ, TypX, VirErr,
 };
 use vir::def::{RETURN_VALUE, VERUS_SPEC};
+use crate::rust_to_vir_base::mk_visibility;
 
 pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::ast::Path {
     // turn a::b::c into a::b::method_name
@@ -178,7 +179,7 @@ pub(crate) fn check_item_fn<'tcx>(
 
     let vattrs = get_verifier_attrs(attrs)?;
 
-    let (path, proxy) = if vattrs.external_exec_specification {
+    let (path, proxy, visibility) = if vattrs.external_exec_specification {
         // This function is the proxy, and we need to look up the actual path.
 
         assert!(vattrs.external_body); // TODO
@@ -208,10 +209,23 @@ pub(crate) fn check_item_fn<'tcx>(
         let external_id = get_external_def_id(ctxt.tcx, body_id, body, sig)?;
         let external_path = def_id_to_vir_path(ctxt.tcx, external_id);
 
-        (external_path, Some((*ctxt.spanned_new(sig.span, this_path)).clone()))
+        let owning_module_of_external_item = crate::rust_to_vir_base::def_id_to_vir_module(ctxt.tcx, external_id);
+        let external_item_visibility = mk_visibility(
+            ctxt,
+            &Some(owning_module_of_external_item), // REVIEW should this ever be None?
+            external_id);
+        if !visibility.is_at_least_as_visible_as(&external_item_visibility) {
+            return err_span(
+                sig.span,
+                "a function marked `external_exec_specification` must be at least as visible as the function it provides a spec for"
+            );
+        }
+
+        let proxy = (*ctxt.spanned_new(sig.span, this_path)).clone();
+        (external_path, Some(proxy), external_item_visibility)
     } else {
         // No proxy.
-        (this_path, None)
+        (this_path, None, visibility)
     };
 
     let name = Arc::new(FunX { path: path.clone(), trait_path: trait_path.clone() });

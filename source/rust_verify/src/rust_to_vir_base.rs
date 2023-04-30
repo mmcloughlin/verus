@@ -65,6 +65,36 @@ pub(crate) fn def_path_to_vir_path<'tcx>(
     Some(Arc::new(PathX { krate, segments: Arc::new(segments) }))
 }
 
+pub(crate) fn def_path_to_vir_module<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_path: DefPath,
+) -> Path {
+    let multi_crate = MULTI_CRATE.with(|m| m.load(std::sync::atomic::Ordering::Relaxed));
+    let mut krate = if def_path.krate == LOCAL_CRATE && !multi_crate {
+        None
+    } else {
+        Some(Arc::new(tcx.crate_name(def_path.krate).to_string()))
+    };
+    let mut segments: Vec<vir::ast::Ident> = Vec::new();
+    for d in def_path.data.iter() {
+        use rustc_hir::definitions::DefPathData;
+        match &d.data {
+            DefPathData::ValueNs(symbol) | DefPathData::TypeNs(symbol) => {
+                segments.push(Arc::new(symbol.to_string()));
+            }
+            _ => { /* ignore */ }
+        }
+    }
+    Arc::new(PathX { krate, segments: Arc::new(segments) })
+}
+
+pub(crate) fn def_id_to_vir_module<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+) -> Path {
+    def_path_to_vir_module(tcx, tcx.def_path(def_id))
+}
+
 fn get_function_def_impl_item_node<'tcx>(
     tcx: TyCtxt<'tcx>,
     hir_id: rustc_hir::HirId,
@@ -169,6 +199,10 @@ pub(crate) fn def_id_self_to_vir_path<'tcx>(
     // However, it makes for a better path name to use the path to the *type*.
     // So first, we check if the given DefId is the definition of a fn inside an impl.
     // If so, we construct a VIR path based on the VIR path for the type.
+
+    // REVIEW: is this special case needed anymore?
+    // def_path_to_vir_path appears to be more general, now.
+
     if let Some(local_id) = def_id.as_local() {
         let hir = tcx.hir().local_def_id_to_hir_id(local_id);
         if get_function_def_impl_item_node(tcx, hir).is_some() {
