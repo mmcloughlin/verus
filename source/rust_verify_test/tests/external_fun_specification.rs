@@ -187,9 +187,8 @@ test_verify_one_file! {
             !b
         }
 
-        #[spec]
         #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+        spec fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
         {
             negate_bool(b, x)
         }
@@ -203,9 +202,8 @@ test_verify_one_file! {
             !b
         }
 
-        #[proof]
         #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
+        proof fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
         {
             negate_bool(b, x)
         }
@@ -340,7 +338,7 @@ test_verify_one_file! {
     #[test] test_attr_on_const verus_code! {
         #[verifier(external_fn_specification)]
         const x: u8 = 5;
-    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not yet supported for const")
 }
 
 
@@ -364,6 +362,30 @@ test_verify_one_file! {
     #[test] test_attr_on_trait verus_code! {
         #[verifier(external_fn_specification)]
         trait Tr { }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_trait_fn verus_code! {
+        trait Tr {
+            #[verifier(external_fn_specification)]
+            fn foo();
+        }
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_on_trait_fn_impl verus_code! {
+        trait Tr {
+            fn foo();
+        }
+
+        struct X { }
+
+        impl Tr for X {
+            #[verifier(external_fn_specification)]
+            fn foo() { }
+        }
     } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
 }
 
@@ -395,7 +417,7 @@ test_verify_one_file! {
             #[verifier(external_fn_specification)]
             fn stuff();
         }
-    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported on foreign items")
 }
 
 // Mismatched type signatures

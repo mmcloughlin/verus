@@ -178,20 +178,54 @@ pub(crate) fn check_item_fn<'tcx>(
         ctxt.tcx.is_diagnostic_item(Symbol::intern("pervasive::string::new_strlit"), id);
 
     let vattrs = get_verifier_attrs(attrs)?;
+    let mode = get_mode(Mode::Exec, attrs);
 
     let (path, proxy, visibility) = if vattrs.external_fn_specification {
         // This function is the proxy, and we need to look up the actual path.
 
-        assert!(vattrs.external_body); // TODO
-        assert!(!is_new_strlit);
-        assert!(!is_verus_spec);
-        assert!(!is_new_strlit);
-        assert!(!vattrs.autospec.is_some());
+        if mode != Mode::Exec {
+            return err_span(
+                sig.span,
+                format!(
+                    "a function marked `external_fn_specification` cannot be marked `{mode:}`",
+                )
+            );
+        }
+
+        if self_generics.is_some() {
+            return err_span(
+                sig.span,
+                "`external_fn_specification` attribute not supported here"
+            );
+        }
+
+        assert!(vattrs.external_body); // TODO fix this
+
+        if is_new_strlit {
+            return err_span(
+                sig.span,
+                "`external_fn_specification` attribute not supported with new_strlit"
+            );
+        }
 
         if trait_path.is_some() {
             return err_span(
                 sig.span,
                 "external_fn_specification not supported for trait functions",
+            );
+        }
+
+        if is_verus_spec {
+            return err_span(
+                sig.span,
+                "`external_fn_specification` attribute not supported with VERUS_SPEC"
+            );
+        }
+
+        if vattrs.autospec.is_some() {
+            return err_span(
+                sig.span,
+                "`external_fn_specification` attribute not yet supported with `when_used_as_spec`"
             );
         }
 
@@ -235,8 +269,6 @@ pub(crate) fn check_item_fn<'tcx>(
         erasure_info.external_functions.push(name);
         return Ok(None);
     }
-
-    let mode = get_mode(Mode::Exec, attrs);
 
     let self_typ_params = if let Some((cg, impl_def_id)) = self_generics {
         Some(check_generics_bounds_fun(ctxt.tcx, cg, impl_def_id)?)
@@ -651,7 +683,7 @@ pub(crate) fn check_item_const<'tcx>(
     if vattrs.external_fn_specification {
         return err_span(
             span,
-            "external_fn_specification not yet supported for const",
+            "`external_fn_specification` attribute not yet supported for const",
         );
     }
 
@@ -724,7 +756,7 @@ pub(crate) fn check_foreign_item_fn<'tcx>(
     if vattrs.external_fn_specification {
         return err_span(
             span,
-            "external_fn_specification not supported on foreign items",
+            "`external_fn_specification` attribute not supported on foreign items",
         );
     }
 

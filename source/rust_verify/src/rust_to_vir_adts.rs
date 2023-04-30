@@ -15,6 +15,7 @@ use std::sync::Arc;
 use vir::ast::{DatatypeTransparency, DatatypeX, Ident, KrateX, Mode, Path, Variant, VirErr};
 use vir::ast_util::ident_binder;
 use vir::def::positional_field_ident;
+use crate::util::err_span;
 
 fn check_variant_data<'tcx, 'fd>(
     span: Span,
@@ -128,6 +129,14 @@ pub fn check_item_struct<'tcx>(
     }
 
     let vattrs = get_verifier_attrs(attrs)?;
+
+    if vattrs.external_fn_specification {
+        return err_span(
+            span,
+            "`external_fn_specification` attribute not supported here"
+        );
+    }
+
     let def_id = id.owner_id.to_def_id();
     let typ_params =
         Arc::new(check_generics_bounds(ctxt.tcx, generics, vattrs.external_body, def_id)?);
@@ -186,6 +195,14 @@ pub fn check_item_enum<'tcx>(
     assert!(adt_def.is_enum());
 
     let vattrs = get_verifier_attrs(attrs)?;
+
+    if vattrs.external_fn_specification {
+        return err_span(
+            span,
+            "`external_fn_specification` attribute not supported here"
+        );
+    }
+
     let def_id = id.owner_id.to_def_id();
     let typ_params =
         Arc::new(check_generics_bounds(ctxt.tcx, generics, vattrs.external_body, def_id)?);
