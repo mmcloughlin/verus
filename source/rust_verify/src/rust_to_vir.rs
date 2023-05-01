@@ -612,5 +612,8 @@ pub(crate) fn crate_to_vir<'tcx>(ctxt: &Context<'tcx>) -> Result<Krate, VirErr> 
             }
         }
     }
+
+    let erasure_info = ctxt.erasure_info.borrow();
+    vir.external_fns = erasure_info.external_functions.clone();
     Ok(Arc::new(vir))
 }

@@ -800,4 +800,6 @@ pub struct KrateX {
     pub traits: Vec<Trait>,
     /// List of all modules in the crate
     pub module_ids: Vec<Path>,
+    /// List of all 'external' functions in the crate (only useful for diagnostics)
+    pub external_fns: Vec<Fun>,
 }

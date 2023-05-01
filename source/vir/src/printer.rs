@@ -334,7 +334,7 @@ impl ToDebugSNode for Path {
 pub fn write_krate(mut write: impl std::io::Write, vir_crate: &Krate, opts: &ToDebugSNodeOpts) {
     let mut nw = NodeWriter::new_vir();
 
-    let KrateX { datatypes, functions, traits, module_ids } = &**vir_crate;
+    let KrateX { datatypes, functions, traits, module_ids, external_fns } = &**vir_crate;
     for datatype in datatypes.iter() {
         if opts.no_span {
             writeln!(&mut write, ";; {}", &datatype.span.as_string)

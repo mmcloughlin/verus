@@ -13,10 +13,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+enum InaccessibleReason {
+    Proxy(Path),
+    External,
+}
+
 struct Ctxt {
     pub(crate) crate_names: Vec<String>,
     pub(crate) funs: HashMap<Fun, Function>,
     pub(crate) dts: HashMap<Path, Datatype>,
+    pub(crate) inaccessible_paths: HashMap<Path, InaccessibleReason>,
 }
 
 #[warn(unused_must_use)]
@@ -50,13 +56,34 @@ fn check_path_and_get_function<'a>(
     let f = match ctxt.funs.get(x) {
         Some(f) => f,
         None => {
-            let path = path_as_rust_name(&x.path);
-            return error(
-                span,
-                &format!(
-                    "`{path:}` is not supported (note: currently Verus does not support definitions external to the crate, including most features in std)"
-                ),
-            );
+            match ctxt.inaccessible_paths.get(&x.path) {
+                Some(InaccessibleReason::Proxy(actual_path)) => {
+                    return error(
+                        span,
+                        &format!(
+                            "cannot call function marked `external_fn_specification` directly; call `{:}` instead",
+                            path_as_rust_name(actual_path),
+                        ),
+                    );
+                }
+                Some(InaccessibleReason::External) => {
+                    return error(
+                        span,
+                        "cannot call function marked `external`; try marking it `external_body` instead, or add a Verus specification via `external_fn_specification`?"
+                    );
+                }
+                None => {
+                    let path = path_as_rust_name(&x.path);
+                    return error(
+                        span,
+                        &format!(
+                            "`{path:}` is not supported (note: you may be able to add a Verus specification to this function with the `external_fn_specification` attribute){:}",
+                            if x.path.is_rust_std_path() { " (note: the vstd library provides some specification for the Rust std library, but it is currently limited)" } else { "" },
+                        ),
+                    );
+                }
+            }
+            
         }
     };
 
@@ -776,12 +803,16 @@ pub fn check_crate(
 ) -> Result<(), VirErr> {
     crate_names.push("builtin".to_string());
     let mut funs: HashMap<Fun, Function> = HashMap::new();
+    let mut inaccessible_paths: HashMap<Path, InaccessibleReason> = HashMap::new();
     for function in krate.functions.iter() {
         match funs.get(&function.x.name) {
             Some(other_function) => {
                 return Err(func_conflict_error(function, other_function));
             }
             None => {}
+        }
+        if let Some(proxy) = &function.x.proxy {
+            inaccessible_paths.insert(proxy.x.clone(), InaccessibleReason::Proxy(function.x.name.path.clone()));
         }
         funs.insert(function.x.name.clone(), function.clone());
     }
@@ -872,7 +903,7 @@ pub fn check_crate(
         }
     }
 
-    let ctxt = Ctxt { crate_names, funs, dts };
+    let ctxt = Ctxt { crate_names, funs, dts, inaccessible_paths };
     for function in krate.functions.iter() {
         check_function(&ctxt, function, diags)?;
     }

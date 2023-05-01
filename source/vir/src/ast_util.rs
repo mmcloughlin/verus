@@ -37,6 +37,13 @@ impl PathX {
         segments.pop();
         Arc::new(PathX { krate: self.krate.clone(), segments: Arc::new(segments) })
     }
+
+    pub fn is_rust_std_path(&self) -> bool {
+        match &self.krate {
+            Some(k) if &**k == "std" || &**k == "alloc" || &**k == "core" => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Mode {

@@ -165,7 +165,7 @@ test_verify_one_file! {
         fn test() {
             negate_bool_requires_ensures(false, 1);
         }
-    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `negate_bool` instead")
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `crate::negate_bool` instead")
 }
 
 test_verify_one_file! {
@@ -177,6 +177,18 @@ test_verify_one_file! {
         }
     } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `core::mem::swap` instead")
 }
+
+test_verify_one_file! {
+    #[test] test_call_external verus_code! {
+        #[verifier(external)]
+        fn some_external_fn() { }
+
+        fn test() {
+            some_external_fn();
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `core::mem::swap` instead")
+}
+
 
 // If you wrongly try to apply a mode
 
