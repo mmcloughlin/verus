@@ -14,7 +14,6 @@ use rustc_hir::{
     def::Res, Body, BodyId, Crate, ExprKind, FnDecl, FnHeader, FnRetTy, FnSig, Generics, HirId,
     MaybeOwner, MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety,
 };
-use rustc_middle::ty::PolyFnSig;
 use rustc_middle::ty::Predicate;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::{Ident, Symbol};
@@ -191,6 +190,23 @@ pub(crate) fn check_item_fn<'tcx>(
             );
         }
 
+        if vattrs.external {
+            return err_span(
+                sig.span,
+                format!(
+                    "a function cannot be marked both `external_fn_specification` and `external`",
+                ),
+            );
+        }
+        if vattrs.external_body {
+            return err_span(
+                sig.span,
+                format!(
+                    "a function cannot be marked both `external_fn_specification` and `external_body`",
+                ),
+            );
+        }
+
         if self_generics.is_some() {
             return err_span(sig.span, "`external_fn_specification` attribute not supported here");
         }
@@ -254,6 +270,7 @@ pub(crate) fn check_item_fn<'tcx>(
                 ),
             );
         }
+        // trait bounds aren't part of the type signature - we have to check those separately
         if !predicates_match(ctxt.tcx, id, external_id) {
             return err_span(
                 sig.span,
@@ -650,6 +667,7 @@ fn predicates_match<'tcx>(
     if preds1.len() != preds2.len() {
         return false;
     }
+    // TODO should allow this to work if the predicates are in a different order
     for (p1, p2) in preds1.iter().zip(preds2.iter()) {
         let p1 = tcx.anonymize_bound_vars(p1.kind());
         let p2 = tcx.anonymize_bound_vars(p2.kind());

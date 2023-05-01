@@ -349,7 +349,7 @@ test_verify_one_file! {
     #[test] test_attr_on_const verus_code! {
         #[verifier(external_fn_specification)]
         const x: u8 = 5;
-    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not yet supported for const")
+    } => Err(err) => assert_vir_error_msg(err, "`external_fn_specification` attribute not supported here")
 }
 
 test_verify_one_file! {
@@ -581,4 +581,30 @@ test_verify_one_file! {
             foo(y);
         }
     } => Err(err) => assert_rust_error_msg(err, "cannot assign to `x` because it is borrowed")
+}
+
+// Other
+
+test_verify_one_file! {
+    #[test] test_attr_with_external verus_code! {
+        #[verifier(external_fn_specification)]
+        #[verifier(external)]
+        pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
+            ensures *a == *old(b), *b == *old(a),
+        {
+            std::mem::swap(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function cannot be marked both `external_fn_specification` and `external`")
+}
+
+test_verify_one_file! {
+    #[test] test_attr_with_external_body verus_code! {
+        #[verifier(external_fn_specification)]
+        #[verifier(external_body)]
+        pub fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
+            ensures *a == *old(b), *b == *old(a),
+        {
+            std::mem::swap(a, b)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "a function cannot be marked both `external_fn_specification` and `external_body`")
 }
