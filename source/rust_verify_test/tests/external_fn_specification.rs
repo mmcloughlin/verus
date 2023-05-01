@@ -512,7 +512,7 @@ test_verify_one_file! {
         {
             core::mem::swap(a, b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match exactly (trait bound mismatch)")
 }
 
 test_verify_one_file! {
@@ -526,7 +526,27 @@ test_verify_one_file! {
         {
             sw(a, b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match exactly (trait bound mismatch)")
+}
+
+test_verify_one_file! {
+    #[test] mismatch_trait_bound verus_code! {
+        trait Tr1 { }
+        trait Tr2 { }
+
+        struct Stuff { }
+        impl Tr1 for Stuff { }
+
+        #[verifier(external)]
+        fn x<T: Tr1>() {
+        }
+
+        #[verifier(external_fn_specification)]
+        fn y<T: Tr2>()
+        {
+            x::<Stuff>()
+        }
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match exactly (trait bound mismatch)")
 }
 
 // Lifetime checking

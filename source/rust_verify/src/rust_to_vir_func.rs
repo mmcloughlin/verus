@@ -15,6 +15,7 @@ use rustc_hir::{
     MaybeOwner, MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety,
 };
 use rustc_middle::ty::PolyFnSig;
+use rustc_middle::ty::Predicate;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::{Ident, Symbol};
 use rustc_span::Span;
@@ -249,7 +250,15 @@ pub(crate) fn check_item_fn<'tcx>(
             return err_span(
                 sig.span,
                 format!(
-                    "external_fn_specification requires function type signature to match exactly (got `{ty1:#?}` and `{ty2:#?}`"
+                    "external_fn_specification requires function type signature to match exactly (got `{ty1:#?}` and `{ty2:#?}`)"
+                ),
+            );
+        }
+        if !predicates_match(ctxt.tcx, id, external_id) {
+            return err_span(
+                sig.span,
+                format!(
+                    "external_fn_specification requires function type signature to match exactly (trait bound mismatch)"
                 ),
             );
         }
@@ -629,6 +638,33 @@ fn is_mut_ty<'tcx>(
         }
         _ => None,
     }
+}
+
+fn predicates_match<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    id1: rustc_span::def_id::DefId,
+    id2: rustc_span::def_id::DefId,
+) -> bool {
+    let preds1 = all_predicates(tcx, id1);
+    let preds2 = all_predicates(tcx, id2);
+    if preds1.len() != preds2.len() {
+        return false;
+    }
+    for (p1, p2) in preds1.iter().zip(preds2.iter()) {
+        let p1 = tcx.anonymize_bound_vars(p1.kind());
+        let p2 = tcx.anonymize_bound_vars(p2.kind());
+        if p1 != p2 {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn all_predicates<'tcx>(tcx: TyCtxt<'tcx>, id1: rustc_span::def_id::DefId) -> Vec<Predicate<'tcx>> {
+    let preds = tcx.predicates_of(id1);
+    // TODO need to fix this when external_fn_specification handles associated methods / member functions
+    assert!(preds.parent.is_none());
+    preds.predicates.iter().map(|x| x.0).collect()
 }
 
 pub(crate) fn get_external_def_id<'tcx>(
