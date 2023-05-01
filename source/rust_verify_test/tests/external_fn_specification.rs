@@ -445,7 +445,7 @@ test_verify_one_file! {
         {
             or_bools(c, b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "params do not match")
+    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
 }
 
 test_verify_one_file! {
@@ -461,7 +461,7 @@ test_verify_one_file! {
         {
             or_bools(b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "params do not match")
+    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
 }
 
 test_verify_one_file! {
@@ -477,7 +477,23 @@ test_verify_one_file! {
         {
             or_bools(b, c, c)
         }
-    } => Err(err) => assert_vir_error_msg(err, "params do not match")
+    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
+}
+
+test_verify_one_file! {
+    #[test] params_dont_match_let verus_code! {
+        #[verifier(external)]
+        fn or_bools(b: bool, c: bool) -> bool {
+            b || c
+        }
+
+        #[verifier(external_fn_specification)]
+        fn negate_bool_requires_ensures(b: u8, c: bool) -> (ret_b: bool)
+        {
+            let b = false;
+            or_bools(b, c)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
 }
 
 test_verify_one_file! {

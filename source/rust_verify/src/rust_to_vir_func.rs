@@ -618,13 +618,24 @@ pub(crate) fn get_external_def_id<'tcx>(
     body: &Body<'tcx>,
     sig: &'tcx FnSig<'tcx>,
 ) -> Result<rustc_span::def_id::DefId, VirErr> {
+    let err = || err_span(
+        sig.span,
+        format!("external_fn_specification encoding error: body should end in call expression"),
+    );
+    /*
+    let mismatch_err = || err_span(
+        sig.span,
+        format!("external_fn_specification encoding error: parameters do not match"),
+    );
+    */
+
     // Get the 'body' of this function (skipping over header if necessary)
     let expr = match &body.value.kind {
         ExprKind::Block(block_body, _) => {
             match &block_body.expr {
                 Some(body_value) => body_value,
                 None => {
-                    panic!("no");
+                    return err();
                 } // TODO
             }
         }
@@ -642,18 +653,38 @@ pub(crate) fn get_external_def_id<'tcx>(
                 let types = body_id_to_types(tcx, body_id);
                 let def = types.qpath_res(&qpath, fun.hir_id);
                 match def {
-                    rustc_hir::def::Res::Def(_, def_id) => Ok(def_id),
+                    rustc_hir::def::Res::Def(_, def_id) => {
+                        /*
+                        if args.len() != sig.decl.inputs.len() {
+                            return mismatch_err();
+                        }
+                        for (arg, param) in args.iter().zip(body.params.zip()) {
+                            let arg_name = 
+                            match &arg.kind {
+                                (ExprKind::Path(QPath::Resolved(None, path)), _) => {
+                                    match path.res {
+                                        Res::Local(id)
+                                        _ => { return mismatch_err(); }
+                                    }
+                                }
+                                _ => { return mismatch_err(); }
+                            };
+                        }
+                        */
+
+                        Ok(def_id),
+                    }
                     _ => {
-                        panic!("no");
+                        return err();
                     }
                 }
             }
             _ => {
-                panic!("no");
+                return err();
             }
         },
         _ => {
-            panic!("no");
+            return err();
         }
     }
 }
