@@ -14,6 +14,7 @@ use rustc_hir::{
     def::Res, Body, BodyId, Crate, ExprKind, FnDecl, FnHeader, FnRetTy, FnSig, Generics, HirId,
     MaybeOwner, MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety,
 };
+use rustc_middle::ty::PolyFnSig;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::{Ident, Symbol};
 use rustc_span::Span;
@@ -24,7 +25,6 @@ use vir::ast::{
     ParamX, Typ, TypX, VirErr,
 };
 use vir::def::{RETURN_VALUE, VERUS_SPEC};
-use rustc_middle::ty::PolyFnSig;
 
 pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::ast::Path {
     // turn a::b::c into a::b::method_name
@@ -236,31 +236,21 @@ pub(crate) fn check_item_fn<'tcx>(
         let external_id = get_external_def_id(ctxt.tcx, body_id, body, sig)?;
         let external_path = def_id_to_vir_path(ctxt.tcx, external_id);
 
-        let ty1 = ctxt.tcx.type_of(id);
-        let ty2 = ctxt.tcx.type_of(external_id);
-        println!("ty1: {:#?}", ty1);
-        println!("ty2: {:#?}", ty2);
-        match (ty1.kind(), ty2.kind()) {
-            (rustc_middle::ty::FnDef(_def_id1, substs_ref1), rustc_middle::ty::FnDef(_def_id2, substs_ref2)) => {
-                let sig1 = ctxt.tcx.fn_sig(id);
-                let sig2 = ctxt.tcx.fn_sig(external_id);
+        let sig1 = ctxt.tcx.fn_sig(id);
+        let sig2 = ctxt.tcx.fn_sig(external_id);
 
-                //println!("sig1: {:#?}", sig1);
-                //println!("sig2: {:#?}", sig2);
+        let sig1_anon = ctxt.tcx.anonymize_bound_vars(sig1);
+        let sig2_anon = ctxt.tcx.anonymize_bound_vars(sig2);
 
-                println!("sig1: {:#?}", sig1);
-                println!("sig2: {:#?}", sig2);
-                let sig1 = ctxt.tcx.anonymize_bound_vars(sig1);
-                let sig2 = ctxt.tcx.anonymize_bound_vars(sig2);
-                println!("eq: {:#?}", sig1 == sig2);
-
-                if !fn_sigs_identical(sig1, sig2) {
-                    return err_span(sig.span, format!("external_fn_specification requires function type signature to match exactly (got `{ty1:#?}` and `{ty2:#?}`"));
-                }
-            }
-            _ => {
-                return err_span(sig.span, "expected FnDef type");
-            }
+        if sig1_anon != sig2_anon {
+            let ty1 = ctxt.tcx.type_of(id);
+            let ty2 = ctxt.tcx.type_of(external_id);
+            return err_span(
+                sig.span,
+                format!(
+                    "external_fn_specification requires function type signature to match exactly (got `{ty1:#?}` and `{ty2:#?}`"
+                ),
+            );
         }
 
         let owning_module_of_external_item =
@@ -640,52 +630,18 @@ fn is_mut_ty<'tcx>(
     }
 }
 
-fn fn_sigs_identical<'tcx>(sig1: PolyFnSig<'tcx>, sig2: PolyFnSig<'tcx>) -> bool {
-    let bound_vars1 = sig1.bound_vars();
-    let bound_vars2 = sig2.bound_vars();
-    let sig1 = sig1.skip_binder();
-    let sig2 = sig2.skip_binder();
-    /*if bound_vars1 != bound_vars2 {
-        println!("bv1: {:#?}", bound_vars1);
-        println!("bv2: {:#?}", bound_vars2);
-        println!("hi");
-        return false;
-    }*/
-    if sig1 != sig2 {
-        println!("hey");
-        println!("s1: {:}", sig1);
-        println!("s2: {:}", sig2);
-        return false;
-    }
-    return true;
-}
-
-/*
-fn fn_types_are_equal<'tcx>(ty1: Ty<'tcx>, ty2: Ty<'tcx>) -> Result<bool, VirErr> {
-    match (ty1.kind, ty2.kind) => {
-        (FnDef(_def_id1, substs_ref1), FnDef(_def_id2, substs_ref2)) => {
-        }
-        _ => false,
-    }
-}
-*/
-
 pub(crate) fn get_external_def_id<'tcx>(
     tcx: TyCtxt<'tcx>,
     body_id: &BodyId,
     body: &Body<'tcx>,
     sig: &'tcx FnSig<'tcx>,
 ) -> Result<rustc_span::def_id::DefId, VirErr> {
-    let err = || err_span(
-        sig.span,
-        format!("external_fn_specification encoding error: body should end in call expression"),
-    );
-    /*
-    let mismatch_err = || err_span(
-        sig.span,
-        format!("external_fn_specification encoding error: parameters do not match"),
-    );
-    */
+    let err = || {
+        err_span(
+            sig.span,
+            format!("external_fn_specification encoding error: body should end in call expression"),
+        )
+    };
 
     // Get the 'body' of this function (skipping over header if necessary)
     let expr = match &body.value.kind {
@@ -700,11 +656,7 @@ pub(crate) fn get_external_def_id<'tcx>(
         _ => &body.value,
     };
 
-    // TODO check args match the inner call
-    // TODO check type args match the inner call
-    // TODO check sigs match exactly
-    // TODO MethodCall
-    // TODO errors
+    // TODO handle MethodCall
     match &expr.kind {
         ExprKind::Call(fun, _args) => match &fun.kind {
             ExprKind::Path(qpath) => {
@@ -714,24 +666,6 @@ pub(crate) fn get_external_def_id<'tcx>(
                     rustc_hir::def::Res::Def(_, def_id) => {
                         // We don't need to check the args match or anything,
                         // the type signature check done by the caller is sufficient.
-                        /*
-                        if args.len() != sig.decl.inputs.len() {
-                            return mismatch_err();
-                        }
-                        for (arg, param) in args.iter().zip(body.params.zip()) {
-                            let arg_name = 
-                            match &arg.kind {
-                                (ExprKind::Path(QPath::Resolved(None, path)), _) => {
-                                    match path.res {
-                                        Res::Local(id)
-                                        _ => { return mismatch_err(); }
-                                    }
-                                }
-                                _ => { return mismatch_err(); }
-                            };
-                        }
-                        */
-
                         Ok(def_id)
                     }
                     _ => {
