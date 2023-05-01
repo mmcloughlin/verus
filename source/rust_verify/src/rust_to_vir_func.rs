@@ -24,6 +24,7 @@ use vir::ast::{
     ParamX, Typ, TypX, VirErr,
 };
 use vir::def::{RETURN_VALUE, VERUS_SPEC};
+use rustc_middle::ty::PolyFnSig;
 
 pub(crate) fn autospec_fun(path: &vir::ast::Path, method_name: String) -> vir::ast::Path {
     // turn a::b::c into a::b::method_name
@@ -234,6 +235,33 @@ pub(crate) fn check_item_fn<'tcx>(
         let body = find_body(ctxt, body_id);
         let external_id = get_external_def_id(ctxt.tcx, body_id, body, sig)?;
         let external_path = def_id_to_vir_path(ctxt.tcx, external_id);
+
+        let ty1 = ctxt.tcx.type_of(id);
+        let ty2 = ctxt.tcx.type_of(external_id);
+        println!("ty1: {:#?}", ty1);
+        println!("ty2: {:#?}", ty2);
+        match (ty1.kind(), ty2.kind()) {
+            (rustc_middle::ty::FnDef(_def_id1, substs_ref1), rustc_middle::ty::FnDef(_def_id2, substs_ref2)) => {
+                let sig1 = ctxt.tcx.fn_sig(id);
+                let sig2 = ctxt.tcx.fn_sig(external_id);
+
+                //println!("sig1: {:#?}", sig1);
+                //println!("sig2: {:#?}", sig2);
+
+                println!("sig1: {:#?}", sig1);
+                println!("sig2: {:#?}", sig2);
+                let sig1 = ctxt.tcx.anonymize_bound_vars(sig1);
+                let sig2 = ctxt.tcx.anonymize_bound_vars(sig2);
+                println!("eq: {:#?}", sig1 == sig2);
+
+                if !fn_sigs_identical(sig1, sig2) {
+                    return err_span(sig.span, format!("external_fn_specification requires function type signature to match exactly (got `{ty1:#?}` and `{ty2:#?}`"));
+                }
+            }
+            _ => {
+                return err_span(sig.span, "expected FnDef type");
+            }
+        }
 
         let owning_module_of_external_item =
             crate::rust_to_vir_base::def_id_to_vir_module(ctxt.tcx, external_id);
@@ -612,6 +640,36 @@ fn is_mut_ty<'tcx>(
     }
 }
 
+fn fn_sigs_identical<'tcx>(sig1: PolyFnSig<'tcx>, sig2: PolyFnSig<'tcx>) -> bool {
+    let bound_vars1 = sig1.bound_vars();
+    let bound_vars2 = sig2.bound_vars();
+    let sig1 = sig1.skip_binder();
+    let sig2 = sig2.skip_binder();
+    /*if bound_vars1 != bound_vars2 {
+        println!("bv1: {:#?}", bound_vars1);
+        println!("bv2: {:#?}", bound_vars2);
+        println!("hi");
+        return false;
+    }*/
+    if sig1 != sig2 {
+        println!("hey");
+        println!("s1: {:}", sig1);
+        println!("s2: {:}", sig2);
+        return false;
+    }
+    return true;
+}
+
+/*
+fn fn_types_are_equal<'tcx>(ty1: Ty<'tcx>, ty2: Ty<'tcx>) -> Result<bool, VirErr> {
+    match (ty1.kind, ty2.kind) => {
+        (FnDef(_def_id1, substs_ref1), FnDef(_def_id2, substs_ref2)) => {
+        }
+        _ => false,
+    }
+}
+*/
+
 pub(crate) fn get_external_def_id<'tcx>(
     tcx: TyCtxt<'tcx>,
     body_id: &BodyId,
@@ -648,12 +706,14 @@ pub(crate) fn get_external_def_id<'tcx>(
     // TODO MethodCall
     // TODO errors
     match &expr.kind {
-        ExprKind::Call(fun, args) => match &fun.kind {
+        ExprKind::Call(fun, _args) => match &fun.kind {
             ExprKind::Path(qpath) => {
                 let types = body_id_to_types(tcx, body_id);
                 let def = types.qpath_res(&qpath, fun.hir_id);
                 match def {
                     rustc_hir::def::Res::Def(_, def_id) => {
+                        // We don't need to check the args match or anything,
+                        // the type signature check done by the caller is sufficient.
                         /*
                         if args.len() != sig.decl.inputs.len() {
                             return mismatch_err();
@@ -672,7 +732,7 @@ pub(crate) fn get_external_def_id<'tcx>(
                         }
                         */
 
-                        Ok(def_id),
+                        Ok(def_id)
                     }
                     _ => {
                         return err();
