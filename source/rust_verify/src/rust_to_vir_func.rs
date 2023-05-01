@@ -287,10 +287,10 @@ pub(crate) fn check_item_fn<'tcx>(
             &Some(owning_module_of_external_item), // REVIEW should this ever be None? what's owning module None mean?
             external_id,
         );
-        if !visibility.is_at_least_as_visible_as(&external_item_visibility) {
+        if !vir::ast_util::is_visible_to_opt(&visibility, &external_item_visibility.restricted_to) {
             return err_span(
                 sig.span,
-                "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for",
+                "a function marked `external_fn_specification` must be visible to the function it provides a spec for",
             );
         }
 

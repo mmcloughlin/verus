@@ -310,37 +310,18 @@ test_verify_one_file! {
         pub fn negate_bool(b: bool, x: u8) -> bool {
             !b
         }
-    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for")
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be visible to the function it provides a spec for")
 }
 
 test_verify_one_file! {
     #[test] test_proxy_is_more_private2 verus_code! {
-        mod X {
-            #[verifier(external_fn_specification)]
-            pub fn negate_bool_requires_ensures(b: bool, x: u8) -> bool
-            {
-                crate::Y::negate_bool(b, x)
-            }
-        }
-
-        pub mod Y {
-            #[verifier(external)]
-            pub fn negate_bool(b: bool, x: u8) -> bool {
-                !b
-            }
-        }
-    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for")
-}
-
-test_verify_one_file! {
-    #[test] test_proxy_is_more_private3 verus_code! {
         #[verifier(external_fn_specification)]
         fn swap_requires_ensures<T>(a: &mut T, b: &mut T)
             ensures *a == *old(b), *b == *old(a),
         {
             std::mem::swap(a, b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be at least as visible as the function it provides a spec for")
+    } => Err(err) => assert_vir_error_msg(err, "a function marked `external_fn_specification` must be visible to the function it provides a spec for")
 }
 
 // Test the attribute in weird places
