@@ -433,83 +433,92 @@ test_verify_one_file! {
 // Mismatched type signatures
 
 test_verify_one_file! {
-    #[test] mixed_up_params verus_code! {
+    #[test] mismatch_params verus_code! {
         #[verifier(external)]
-        fn or_bools(b: bool, c: bool) -> bool {
-            b || c
+        fn x(b: bool) -> bool {
+            b
         }
 
         #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: bool, c: bool) -> (ret_b: bool)
-            ensures ret_b == b || c
+        fn y(b: bool, c: bool) -> (ret_b: bool)
         {
-            or_bools(c, b)
+            x(b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
 }
 
 test_verify_one_file! {
-    #[test] wrong_num_params verus_code! {
+    #[test] mismatch_params2 verus_code! {
         #[verifier(external)]
-        fn or_bools(b: bool, c: bool) -> bool {
-            b || c
+        fn x(b: bool) -> bool {
+            b
         }
 
         #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: bool, c: bool) -> (ret_b: bool)
-            ensures ret_b == b || c
+        fn y(b: u8) -> (ret_b: bool)
         {
-            or_bools(b)
+            x(false)
         }
-    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
 }
 
 test_verify_one_file! {
-    #[test] wrong_num_params2 verus_code! {
+    #[test] mismatch_return verus_code! {
         #[verifier(external)]
-        fn or_bools(b: bool, c: bool) -> bool {
-            b || c
+        fn x<'a>(b: &'a mut bool) -> &'a mut bool {
+            b
         }
 
         #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: bool, c: bool) -> (ret_b: bool)
-            ensures ret_b == b || c
+        fn y<'a>(b: &'a mut bool) -> (ret_b: &'a bool)
         {
-            or_bools(b, c, c)
+            x(b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
 }
 
 test_verify_one_file! {
-    #[test] params_dont_match_let verus_code! {
+    #[test] mismatch_type_params verus_code! {
         #[verifier(external)]
-        fn or_bools(b: bool, c: bool) -> bool {
-            b || c
+        fn x<S, T>(s: S, t: T) {
         }
 
         #[verifier(external_fn_specification)]
-        fn negate_bool_requires_ensures(b: u8, c: bool) -> (ret_b: bool)
+        fn y<S, T>(s: T, t: S)
         {
-            let b = false;
-            or_bools(b, c)
+            x(t, s)
         }
-    } => Err(err) => assert_vir_error_msg(err, "parameters do not match")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
 }
 
 test_verify_one_file! {
-    #[test] extra_trait_bound verus_code! {
+    #[test] mismatch_lt_params verus_code! {
+        #[verifier(external)]
+        fn x<'a, 'b>(u: &'a u8, v: &'b u8) -> &'a u8 {
+            u
+        }
+
         #[verifier(external_fn_specification)]
-        fn swap_requires_ensures<T: Copy>(a: &mut T, b: &mut T)
+        fn y<'a, 'b>(u: &'b u8, v: &'a u8) -> &'a u8 {
+            x(v, u)
+        }
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
+}
+
+test_verify_one_file! {
+    #[test] mismatch_extra_trait_bound verus_code! {
+        #[verifier(external_fn_specification)]
+        pub fn swap_requires_ensures<T: Copy>(a: &mut T, b: &mut T)
         {
             core::mem::swap(a, b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "extra trait bound")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
 }
 
 test_verify_one_file! {
-    #[test] extra_trait_bound2 verus_code! {
+    #[test] mismatch_extra_trait_bound2 verus_code! {
         #[verifier(external)]
-        fn sw(a: &mut T, b: &mut T) {
+        fn sw<T>(a: &mut T, b: &mut T) {
         }
 
         #[verifier(external_fn_specification)]
@@ -517,7 +526,7 @@ test_verify_one_file! {
         {
             sw(a, b)
         }
-    } => Err(err) => assert_vir_error_msg(err, "extra trait bound")
+    } => Err(err) => assert_vir_error_msg(err, "external_fn_specification requires function type signature to match")
 }
 
 // Lifetime checking

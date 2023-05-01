@@ -239,6 +239,7 @@ pub(crate) fn check_item_fn<'tcx>(
         let sig1 = ctxt.tcx.fn_sig(id);
         let sig2 = ctxt.tcx.fn_sig(external_id);
 
+        // Make sure names of binders don't influence equality check
         let sig1_anon = ctxt.tcx.anonymize_bound_vars(sig1);
         let sig2_anon = ctxt.tcx.anonymize_bound_vars(sig2);
 
