@@ -186,9 +186,8 @@ test_verify_one_file! {
         fn test() {
             some_external_fn();
         }
-    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external_fn_specification` directly; call `core::mem::swap` instead")
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external`")
 }
-
 
 // If you wrongly try to apply a mode
 
