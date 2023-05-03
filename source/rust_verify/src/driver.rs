@@ -16,6 +16,7 @@ fn run_compiler<'a, 'b>(
     mut rustc_args: Vec<String>,
     syntax_macro: bool,
     erase_ghost: bool,
+    print_erased: bool,
     verifier: &'b mut (dyn verus_rustc_driver::Callbacks + Send),
     file_loader: Box<dyn 'static + rustc_span::source_map::FileLoader + Send + Sync>,
     _build_test_mode: bool, // TODO is this needed?
@@ -24,6 +25,7 @@ fn run_compiler<'a, 'b>(
         &mut rustc_args,
         syntax_macro,
         erase_ghost,
+        print_erased,
     );
     mk_compiler(&rustc_args, verifier, file_loader).run()
 }
@@ -133,7 +135,7 @@ pub(crate) fn run_with_erase_macro_compile(
     for a in allow {
         rustc_args.extend(["-A", a].map(|s| s.to_string()));
     }
-    run_compiler(rustc_args, true, true, &mut callbacks, file_loader, build_test_mode)
+    run_compiler(rustc_args, true, true, false, &mut callbacks, file_loader, build_test_mode)
 }
 
 struct VerusRoot {
@@ -247,6 +249,7 @@ pub fn run<F>(
     mut rustc_args: Vec<String>,
     file_loader: F,
     build_test_mode: bool,
+    print_erased: bool,
 ) -> (Verifier, Stats, Result<(), ()>)
 where
     F: 'static + rustc_span::source_map::FileLoader + Send + Sync + Clone,
@@ -293,6 +296,7 @@ where
         rustc_args.clone(),
         true,
         false,
+        print_erased,
         &mut verifier_callbacks,
         Box::new(file_loader.clone()),
         build_test_mode,

@@ -75,7 +75,20 @@ pub fn enable_default_features_and_verus_attr(
     rustc_args: &mut Vec<String>,
     syntax_macro: bool,
     erase_ghost: bool,
+    print_erased: bool,
 ) {
+    let register = |rustc_args: &mut Vec<String>| {
+        rustc_args.push("-Zcrate-attr=register_tool(verus)".to_string());
+        rustc_args.push("-Zcrate-attr=register_tool(verifier)".to_string());
+    };
+    if print_erased {
+        rustc_args.push("--cfg".to_string());
+        rustc_args.push("verus_macro_erase_all_ghost".to_string());
+        rustc_args.push("-Zunpretty=expanded".to_string());
+        rustc_args.push("-Zcrate-attr=feature(register_tool)".to_string());
+        register(rustc_args);
+        return;
+    }
     if syntax_macro {
         // REVIEW: syntax macro adds superfluous parentheses and braces
         for allow in &["unused_parens", "unused_braces"] {
@@ -102,9 +115,7 @@ pub fn enable_default_features_and_verus_attr(
         rustc_args.push("-Z".to_string());
         rustc_args.push(format!("crate-attr=feature({})", feature));
     }
-
-    rustc_args.push("-Zcrate-attr=register_tool(verus)".to_string());
-    rustc_args.push("-Zcrate-attr=register_tool(verifier)".to_string());
+    register(rustc_args);
 }
 
 pub fn parse_args(program: &String, args: impl Iterator<Item = String>) -> (Args, Vec<String>) {

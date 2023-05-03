@@ -65,7 +65,7 @@ pub fn main() {
                 let file_loader = PervasiveFileLoader::new(Some(pervasive_path.to_string()));
                 let verifier = Verifier::new(our_args);
                 let (_verifier, _stats, status) =
-                    rust_verify::driver::run(verifier, internal_args, file_loader, true);
+                    rust_verify::driver::run(verifier, internal_args, file_loader, true, false);
                 status.expect("failed to build vstd library");
                 return;
             }
@@ -97,16 +97,21 @@ pub fn main() {
 
     let mut args = if build_test_mode { internal_args } else { std::env::args() };
     let program = if build_test_mode { internal_program } else { args.next().unwrap() };
-    let (our_args, rustc_args) = rust_verify::config::parse_args(&program, args);
+    let (mut our_args, rustc_args) = rust_verify::config::parse_args(&program, args);
     let pervasive_path = our_args.pervasive_path.clone();
 
     std::env::set_var("RUSTC_BOOTSTRAP", "1");
+
+    let print_erased = our_args.print_erased;
+    if print_erased {
+        our_args.no_lifetime = true;
+    }
 
     let file_loader = rust_verify::file_loader::PervasiveFileLoader::new(pervasive_path);
     let verifier = rust_verify::verifier::Verifier::new(our_args);
 
     let (verifier, stats, status) =
-        rust_verify::driver::run(verifier, rustc_args, file_loader, build_test_mode);
+        rust_verify::driver::run(verifier, rustc_args, file_loader, build_test_mode, print_erased);
 
     let total_time_1 = std::time::Instant::now();
     let total_time = total_time_1 - total_time_0;
