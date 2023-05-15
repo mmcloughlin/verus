@@ -1,7 +1,7 @@
 use crate::ast::VirErr;
 use crate::ast::{Expr, ExprX};
 use crate::ast_util::error;
-use crate::ast_visitor::expr_visitor_check;
+use crate::ast_visitor::{VisitorScopeMap, expr_visitor_check_with_scope_map};
 
 /// Makes the following check:
 ///
@@ -15,7 +15,8 @@ use crate::ast_visitor::expr_visitor_check;
 ///     (This is actually easy to support, but we expect it might be confusing to the user.)
 
 pub fn check_closure_well_formed(expr: &Expr) -> Result<(), VirErr> {
-    expr_visitor_check(expr, &mut |scope_map, expr| {
+    let mut scope_map = VisitorScopeMap::new();
+    expr_visitor_check_with_scope_map(&mut scope_map, expr, &mut |scope_map, expr| {
         match &expr.x {
             ExprX::VarLoc(ident) => {
                 if !scope_map.contains_key(ident) {

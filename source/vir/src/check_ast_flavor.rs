@@ -4,7 +4,7 @@ use crate::ast_visitor::{
 };
 pub use air::ast_util::{ident_binder, str_ident};
 
-fn check_expr_simplified(_scope_map: &VisitorScopeMap, expr: &Expr) -> Result<(), ()> {
+fn check_expr_simplified(expr: &Expr) -> Result<(), ()> {
     match expr.x {
         ExprX::ConstVar(_)
         | ExprX::UnaryOpr(UnaryOpr::TupleField { .. }, _)

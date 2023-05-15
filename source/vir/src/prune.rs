@@ -15,6 +15,7 @@ use crate::poly::MonoTyp;
 use air::scope_map::ScopeMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use crate::ast_visitor::VisitorScopeMap;
 
 struct Ctxt {
     module: Path,
@@ -129,7 +130,7 @@ fn traverse_reachable(ctxt: &Ctxt, state: &mut State) {
             if let FunctionKind::TraitMethodImpl { method, .. } = &function.x.kind {
                 reach_function(ctxt, state, method);
             }
-            let fe = |state: &mut State, _: &mut ScopeMap<Ident, Typ>, e: &Expr| {
+            let fe = |state: &mut State, _: &mut VisitorScopeMap, e: &Expr| {
                 match &e.x {
                     ExprX::Call(CallTarget::Static(name, _), _) => {
                         reach_function(ctxt, state, name)
@@ -153,8 +154,8 @@ fn traverse_reachable(ctxt: &Ctxt, state: &mut State) {
                 }
                 Ok(e.clone())
             };
-            let fs = |_: &mut State, _: &mut ScopeMap<Ident, Typ>, s: &Stmt| Ok(vec![s.clone()]);
-            let mut map: ScopeMap<Ident, Typ> = ScopeMap::new();
+            let fs = |_: &mut State, _: &mut VisitorScopeMap, s: &Stmt| Ok(vec![s.clone()]);
+            let mut map: VisitorScopeMap = ScopeMap::new();
             crate::ast_visitor::map_function_visitor_env(&function, &mut map, state, &fe, &fs, &ft)
                 .unwrap();
             let methods = reached_methods(ctxt, state.reached_datatypes.iter().map(|d| (d, &f)));
@@ -200,7 +201,7 @@ pub fn prune_krate_for_module(
             (Some(path), Some(body)) if path == module => {
                 crate::ast_visitor::expr_visitor_check::<(), _>(
                     body,
-                    &mut |_scope_map, e: &Expr| {
+                    &mut |e: &Expr| {
                         match &e.x {
                             ExprX::Fuel(path, fuel) if *fuel > 0 => {
                                 revealed_functions.insert(path.clone());

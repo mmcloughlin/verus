@@ -11,6 +11,7 @@ use crate::early_exit_cf::assert_no_early_exit_in_inv_block;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use crate::ast_visitor::{VisitorScopeMap, VisitorScopeEntry};
 
 struct Ctxt {
     pub(crate) crate_names: Vec<String>,
@@ -73,10 +74,35 @@ fn check_one_expr(
     function: &Function,
     expr: &Expr,
     disallow_private_access: Option<(&Option<Path>, &str)>,
+    scope_map: &crate::ast_visitor::VisitorScopeMap,
 ) -> Result<(), VirErr> {
     match &expr.x {
         ExprX::ConstVar(x) => {
             check_path_and_get_function(ctxt, x, disallow_private_access, &expr.span)?;
+        }
+        ExprX::VarLoc(x) => {
+            match scope_map.get(x) {
+                None => {
+                    let name = user_local_name(x);
+                    return error(
+                        &expr.span,
+                        format!("cannot find local variable `{name:}` (this is probably a Verus bug)"),
+                    );
+                }
+                Some(entry) => {
+                    if !entry.mutable {
+                        // This is supposed to serve as an additional sanity check,
+                        // or in case the user runs with --no-lifetime.
+                        // This check actually runs before rust's lifetime checking, though,
+                        // so the user is likely to see it.
+                        let name = user_local_name(x);
+                        return error(
+                            &expr.span,
+                            format!("cannot assign twice to immutable variable `{name:}`"),
+                        );
+                    }
+                }
+            }
         }
         ExprX::Call(CallTarget::Static(x, _), args) => {
             let f = check_path_and_get_function(ctxt, x, disallow_private_access, &expr.span)?;
@@ -275,11 +301,12 @@ fn check_one_expr(
 fn check_expr(
     ctxt: &Ctxt,
     function: &Function,
+    scope_map: &mut crate::ast_visitor::VisitorScopeMap,
     expr: &Expr,
     disallow_private_access: Option<(&Option<Path>, &str)>,
 ) -> Result<(), VirErr> {
-    crate::ast_visitor::expr_visitor_check(expr, &mut |_scope_map, expr| {
-        check_one_expr(ctxt, function, expr, disallow_private_access)
+    crate::ast_visitor::expr_visitor_check_with_scope_map(scope_map, expr, &mut |scope_map, expr| {
+        check_one_expr(ctxt, function, expr, disallow_private_access, scope_map)
     })
 }
 
@@ -448,7 +475,7 @@ fn check_function(
             return error(&function.span, "bit-vector function mode must be declared as proof");
         }
         if let Some(body) = &function.x.body {
-            crate::ast_visitor::expr_visitor_check(body, &mut |_scope_map, expr| {
+            crate::ast_visitor::expr_visitor_check(body, &mut |expr| {
                 match &expr.x {
                     ExprX::Block(_, _) => {}
                     _ => {
@@ -613,11 +640,21 @@ fn check_function(
         );
     }
 
+    let mut scope_map = VisitorScopeMap::new();
+    scope_map.push_scope(true);
+    for p in function.x.params.iter() {
+        let entry = VisitorScopeEntry {
+            typ: p.x.typ.clone(),
+            mutable: p.x.is_mut,
+        };
+        let _ = scope_map.insert(p.x.name.clone(), entry);
+    }
+
     for req in function.x.require.iter() {
         let msg = "public function requires cannot refer to private items";
         let disallow_private_access = Some((&function.x.visibility.restricted_to, msg));
-        check_expr(ctxt, function, req, disallow_private_access)?;
-        crate::ast_visitor::expr_visitor_check(req, &mut |_scope_map, expr| {
+        check_expr(ctxt, function, &mut scope_map, req, disallow_private_access)?;
+        crate::ast_visitor::expr_visitor_check(req, &mut |expr| {
             if let ExprX::Var(x) = &expr.x {
                 for param in function.x.params.iter().filter(|p| p.x.is_mut) {
                     if *x == param.x.name {
@@ -635,14 +672,25 @@ fn check_function(
         })?;
     }
     for ens in function.x.ensure.iter() {
+        scope_map.push_scope(true);
+        if function.x.has_return() {
+            let entry = VisitorScopeEntry {
+                typ: function.x.ret.x.typ.clone(),
+                mutable: false,
+            };
+            let _ = scope_map.insert(function.x.ret.x.name.clone(), entry);
+        }
+
         let msg = "public function ensures cannot refer to private items";
         let disallow_private_access = Some((&function.x.visibility.restricted_to, msg));
-        check_expr(ctxt, function, ens, disallow_private_access)?;
+        check_expr(ctxt, function, &mut scope_map, ens, disallow_private_access)?;
+
+        scope_map.pop_scope();
     }
     for expr in function.x.decrease.iter() {
         let msg = "public function decreases cannot refer to private items";
         let disallow_private_access = Some((&function.x.visibility.restricted_to, msg));
-        check_expr(ctxt, function, expr, disallow_private_access)?;
+        check_expr(ctxt, function, &mut scope_map, expr, disallow_private_access)?;
     }
     if let Some(expr) = &function.x.decrease_when {
         let msg = "public function decreases_when cannot refer to private items";
@@ -659,7 +707,7 @@ fn check_function(
                 "decreases_when can only be used when there is a decreases clause (use recommends(...) for nonrecursive functions)",
             );
         }
-        check_expr(ctxt, function, expr, disallow_private_access)?;
+        check_expr(ctxt, function, &mut scope_map, expr, disallow_private_access)?;
     }
 
     if function.x.mode == Mode::Exec
@@ -679,7 +727,7 @@ fn check_function(
             }
             _ => None,
         };
-        check_expr(ctxt, function, body, disallow_private_access)?;
+        check_expr(ctxt, function, &mut scope_map, body, disallow_private_access)?;
     }
     Ok(())
 }

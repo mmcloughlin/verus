@@ -735,7 +735,7 @@ fn simplify_function(
     }
 
     let function = Spanned::new(function.span.clone(), functionx);
-    let mut map: ScopeMap<Ident, Typ> = ScopeMap::new();
+    let mut map: crate::ast_visitor::VisitorScopeMap = ScopeMap::new();
     crate::ast_visitor::map_function_visitor_env(
         &function,
         &mut map,
