@@ -1,7 +1,7 @@
 use crate::ast::VirErr;
 use crate::ast::{Expr, ExprX};
 use crate::ast_util::error;
-use crate::ast_visitor::{VisitorScopeMap, expr_visitor_check_with_scope_map};
+use crate::ast_visitor::{expr_visitor_check_with_scope_map, VisitorScopeMap};
 
 /// Makes the following check:
 ///

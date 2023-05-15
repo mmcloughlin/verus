@@ -9,13 +9,13 @@ use crate::ast::{
     Path, Stmt, Typ, TypX,
 };
 use crate::ast_util::{is_visible_to, is_visible_to_of_owner};
+use crate::ast_visitor::VisitorScopeMap;
 use crate::datatype_to_air::is_datatype_transparent;
 use crate::def::{fn_inv_name, fn_namespace_name, Spanned};
 use crate::poly::MonoTyp;
 use air::scope_map::ScopeMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use crate::ast_visitor::VisitorScopeMap;
 
 struct Ctxt {
     module: Path,
@@ -199,18 +199,15 @@ pub fn prune_krate_for_module(
     for f in &krate.functions {
         match (&f.x.visibility.owning_module, &f.x.body) {
             (Some(path), Some(body)) if path == module => {
-                crate::ast_visitor::expr_visitor_check::<(), _>(
-                    body,
-                    &mut |e: &Expr| {
-                        match &e.x {
-                            ExprX::Fuel(path, fuel) if *fuel > 0 => {
-                                revealed_functions.insert(path.clone());
-                            }
-                            _ => {}
+                crate::ast_visitor::expr_visitor_check::<(), _>(body, &mut |e: &Expr| {
+                    match &e.x {
+                        ExprX::Fuel(path, fuel) if *fuel > 0 => {
+                            revealed_functions.insert(path.clone());
                         }
-                        Ok(())
-                    },
-                )
+                        _ => {}
+                    }
+                    Ok(())
+                })
                 .expect("expr_visitor_check failed unexpectedly");
             }
             _ => {}

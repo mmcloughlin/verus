@@ -159,7 +159,8 @@ fn insert_pattern_vars(map: &mut VisitorScopeMap, pattern: &Pattern, is_uninit: 
     match &pattern.x {
         PatternX::Wildcard(_) => {}
         PatternX::Var { name, mutable } => {
-            let entry = VisitorScopeEntry { typ: pattern.typ.clone(), mutable: *mutable || is_uninit };
+            let entry =
+                VisitorScopeEntry { typ: pattern.typ.clone(), mutable: *mutable || is_uninit };
             let _ = map.insert(name.clone(), entry);
         }
         PatternX::Tuple(ps) => {
@@ -179,7 +180,11 @@ fn insert_pattern_vars(map: &mut VisitorScopeMap, pattern: &Pattern, is_uninit: 
     }
 }
 
-pub(crate) fn expr_visitor_check_with_scope_map<E, MF>(scope_map: &mut VisitorScopeMap, expr: &Expr, mf: &mut MF) -> Result<(), E>
+pub(crate) fn expr_visitor_check_with_scope_map<E, MF>(
+    scope_map: &mut VisitorScopeMap,
+    expr: &Expr,
+    mf: &mut MF,
+) -> Result<(), E>
 where
     MF: FnMut(&VisitorScopeMap, &Expr) -> Result<(), E>,
 {
@@ -276,10 +281,7 @@ where
                 ExprX::Quant(_quant, binders, e1) => {
                     map.push_scope(true);
                     for binder in binders.iter() {
-                        let entry = VisitorScopeEntry {
-                            typ: binder.a.clone(),
-                            mutable: false,
-                        };
+                        let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                         let _ = map.insert(binder.name.clone(), entry);
                     }
                     expr_visitor_control_flow!(expr_visitor_dfs(e1, map, mf));
@@ -288,10 +290,7 @@ where
                 ExprX::Closure(params, body) => {
                     map.push_scope(true);
                     for binder in params.iter() {
-                        let entry = VisitorScopeEntry {
-                            typ: binder.a.clone(),
-                            mutable: false,
-                        };
+                        let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                         let _ = map.insert(binder.name.clone(), entry);
                     }
                     expr_visitor_control_flow!(expr_visitor_dfs(body, map, mf));
@@ -300,20 +299,14 @@ where
                 ExprX::ExecClosure { params, ret, requires, ensures, body, external_spec } => {
                     map.push_scope(true);
                     for binder in params.iter() {
-                        let entry = VisitorScopeEntry {
-                            typ: binder.a.clone(),
-                            mutable: false,
-                        };
+                        let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                         let _ = map.insert(binder.name.clone(), entry);
                     }
                     for req in requires.iter() {
                         expr_visitor_control_flow!(expr_visitor_dfs(req, map, mf));
                     }
                     map.push_scope(true);
-                    let ret_entry = VisitorScopeEntry {
-                        typ: ret.a.clone(),
-                        mutable: false,
-                    };
+                    let ret_entry = VisitorScopeEntry { typ: ret.a.clone(), mutable: false };
                     let _ = map.insert(ret.name.clone(), ret_entry);
                     for ens in ensures.iter() {
                         expr_visitor_control_flow!(expr_visitor_dfs(ens, map, mf));
@@ -326,10 +319,7 @@ where
                         None => {}
                         Some((cid, cexpr)) => {
                             map.push_scope(true);
-                            let entry = VisitorScopeEntry {
-                                typ: expr.typ.clone(),
-                                mutable: true,
-                            };
+                            let entry = VisitorScopeEntry { typ: expr.typ.clone(), mutable: true };
                             let _ = map.insert(cid.clone(), entry);
                             expr_visitor_control_flow!(expr_visitor_dfs(&cexpr, map, mf));
                             map.pop_scope();
@@ -339,10 +329,7 @@ where
                 ExprX::Choose { params, cond, body } => {
                     map.push_scope(true);
                     for binder in params.iter() {
-                        let entry = VisitorScopeEntry {
-                            typ: binder.a.clone(),
-                            mutable: false,
-                        };
+                        let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                         let _ = map.insert(binder.name.clone(), entry);
                     }
                     expr_visitor_control_flow!(expr_visitor_dfs(cond, map, mf));
@@ -375,10 +362,7 @@ where
                 ExprX::Forall { vars, require, ensure, proof } => {
                     map.push_scope(true);
                     for binder in vars.iter() {
-                        let entry = VisitorScopeEntry {
-                            typ: binder.a.clone(),
-                            mutable: false,
-                        };
+                        let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                         let _ = map.insert(binder.name.clone(), entry);
                     }
                     expr_visitor_control_flow!(expr_visitor_dfs(require, map, mf));
@@ -424,10 +408,7 @@ where
                 ExprX::OpenInvariant(inv, binder, body, _atomicity) => {
                     expr_visitor_control_flow!(expr_visitor_dfs(inv, map, mf));
                     map.push_scope(true);
-                    let entry = VisitorScopeEntry {
-                        typ: binder.a.clone(),
-                        mutable: true,
-                    };
+                    let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: true };
                     let _ = map.insert(binder.name.clone(), entry);
                     expr_visitor_control_flow!(expr_visitor_dfs(body, map, mf));
                     map.pop_scope();
@@ -524,10 +505,7 @@ where
     } = &function.x;
     map.push_scope(true);
     for p in params.iter() {
-        let entry = VisitorScopeEntry {
-            typ: p.x.typ.clone(),
-            mutable: false,
-        };
+        let entry = VisitorScopeEntry { typ: p.x.typ.clone(), mutable: false };
         let _ = map.insert(p.x.name.clone(), entry);
     }
     for e in require.iter() {
@@ -558,10 +536,7 @@ where
     if let Some((params, req_ens)) = broadcast_forall {
         map.push_scope(true);
         for p in params.iter() {
-            let entry = VisitorScopeEntry {
-                typ: p.x.typ.clone(),
-                mutable: false,
-            };
+            let entry = VisitorScopeEntry { typ: p.x.typ.clone(), mutable: false };
             let _ = map.insert(p.x.name.clone(), entry);
         }
         expr_visitor_control_flow!(expr_visitor_dfs(req_ens, map, mf));
@@ -685,10 +660,7 @@ where
                 vec_map_result(&**binders, |b| b.map_result(|t| map_typ_visitor_env(t, env, ft)))?;
             map.push_scope(true);
             for binder in binders.iter() {
-                let entry = VisitorScopeEntry {
-                    typ: binder.a.clone(),
-                    mutable: false,
-                };
+                let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                 let _ = map.insert(binder.name.clone(), entry);
             }
             let expr1 = map_expr_visitor_env(e1, map, env, fe, fs, ft)?;
@@ -700,10 +672,7 @@ where
                 vec_map_result(&**params, |b| b.map_result(|t| map_typ_visitor_env(t, env, ft)))?;
             map.push_scope(true);
             for binder in params.iter() {
-                let entry = VisitorScopeEntry {
-                    typ: binder.a.clone(),
-                    mutable: false,
-                };
+                let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                 let _ = map.insert(binder.name.clone(), entry);
             }
             let body = map_expr_visitor_env(body, map, env, fe, fs, ft)?;
@@ -717,20 +686,14 @@ where
 
             map.push_scope(true);
             for binder in params.iter() {
-                let entry = VisitorScopeEntry {
-                    typ: binder.a.clone(),
-                    mutable: false,
-                };
+                let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: false };
                 let _ = map.insert(binder.name.clone(), entry);
             }
             let requires =
                 vec_map_result(&**requires, |req| map_expr_visitor_env(req, map, env, fe, fs, ft))?;
             map.push_scope(true);
 
-            let ret_entry = VisitorScopeEntry {
-                typ: ret.a.clone(),
-                mutable: false,
-            };
+            let ret_entry = VisitorScopeEntry { typ: ret.a.clone(), mutable: false };
             let _ = map.insert(ret.name.clone(), ret_entry);
             let ensures =
                 vec_map_result(&**ensures, |ens| map_expr_visitor_env(ens, map, env, fe, fs, ft))?;
@@ -742,10 +705,7 @@ where
                 None => None,
                 Some((cid, cexpr)) => {
                     map.push_scope(true);
-                    let entry = VisitorScopeEntry {
-                        typ: expr.typ.clone(),
-                        mutable: false,
-                    };
+                    let entry = VisitorScopeEntry { typ: expr.typ.clone(), mutable: false };
                     let _ = map.insert(cid.clone(), entry);
                     let cexpr0 = map_expr_visitor_env(cexpr, map, env, fe, fs, ft)?;
                     map.pop_scope();
@@ -899,10 +859,7 @@ where
             let expr1 = map_expr_visitor_env(e1, map, env, fe, fs, ft)?;
             let binder = binder.map_result(|t| map_typ_visitor_env(t, env, ft))?;
             map.push_scope(true);
-            let entry = VisitorScopeEntry {
-                typ: binder.a.clone(),
-                mutable: true,
-            };
+            let entry = VisitorScopeEntry { typ: binder.a.clone(), mutable: true };
             let _ = map.insert(binder.name.clone(), entry);
             let expr2 = map_expr_visitor_env(e2, map, env, fe, fs, ft)?;
             map.pop_scope();
@@ -1039,10 +996,7 @@ where
     map.push_scope(true);
     let params = Arc::new(vec_map_result(params, |p| map_param_visitor(p, env, ft))?);
     for p in params.iter() {
-        let entry = VisitorScopeEntry {
-            typ: p.x.typ.clone(),
-            mutable: false,
-        };
+        let entry = VisitorScopeEntry { typ: p.x.typ.clone(), mutable: p.x.is_mut };
         let _ = map.insert(p.x.name.clone(), entry);
     }
     let ret = map_param_visitor(ret, env, ft)?;
@@ -1051,10 +1005,7 @@ where
 
     map.push_scope(true);
     if function.x.has_return() {
-        let entry = VisitorScopeEntry {
-            typ: ret.x.typ.clone(),
-            mutable: false,
-        };
+        let entry = VisitorScopeEntry { typ: ret.x.typ.clone(), mutable: false };
         let _ = map.insert(ret.x.name.clone(), entry);
     }
     let ensure =
@@ -1093,10 +1044,7 @@ where
         map.push_scope(true);
         let params = Arc::new(vec_map_result(params, |p| map_param_visitor(p, env, ft))?);
         for p in params.iter() {
-            let entry = VisitorScopeEntry {
-                typ: p.x.typ.clone(),
-                mutable: p.x.is_mut,
-            };
+            let entry = VisitorScopeEntry { typ: p.x.typ.clone(), mutable: p.x.is_mut };
             let _ = map.insert(p.x.name.clone(), entry);
         }
         let req_ens = map_expr_visitor_env(req_ens, map, env, fe, fs, ft)?;

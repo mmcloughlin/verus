@@ -10,8 +10,11 @@ use crate::ast::{
 };
 use crate::ast_util::{conjoin, disjoin, if_then_else};
 use crate::ast_util::{error, wrap_in_trigger};
+use crate::ast_visitor::VisitorScopeMap;
 use crate::context::GlobalCtx;
-use crate::def::{prefix_tuple_field, prefix_tuple_param, prefix_tuple_variant, Spanned};
+use crate::def::{
+    prefix_tuple_field, prefix_tuple_param, prefix_tuple_variant, user_local_name, Spanned,
+};
 use crate::util::vec_map_result;
 use air::ast::BinderX;
 use air::ast::Binders;
@@ -227,12 +230,47 @@ fn pattern_to_exprs_rec(
 // that is, if node A is the parent of children B and C,
 // then simplify_one_expr is called first on B and C, and then on A
 
-fn simplify_one_expr(ctx: &GlobalCtx, state: &mut State, expr: &Expr) -> Result<Expr, VirErr> {
+fn simplify_one_expr(
+    ctx: &GlobalCtx,
+    state: &mut State,
+    scope_map: &VisitorScopeMap,
+    expr: &Expr,
+) -> Result<Expr, VirErr> {
     match &expr.x {
         ExprX::ConstVar(x) => {
             let call =
                 ExprX::Call(CallTarget::Static(x.clone(), Arc::new(vec![])), Arc::new(vec![]));
             Ok(SpannedTyped::new(&expr.span, &expr.typ, call))
+        }
+        ExprX::VarLoc(x) => {
+            match scope_map.get(x) {
+                None => {
+                    let name = user_local_name(x);
+                    return error(
+                        &expr.span,
+                        format!(
+                            "cannot find local variable `{name:}` (this is probably a Verus bug)"
+                        ),
+                    );
+                }
+                Some(entry) => {
+                    if !entry.mutable {
+                        // This is supposed to serve as an additional sanity check,
+                        // or in case the user runs with --no-lifetime.
+                        //
+                        // Note: The reason this is here (rather than well_formed.rs)
+                        // is because Rust's lifetime checks are nicer, and they usually
+                        // catch these errors.
+                        // But we run rustc's lifetime-checking after well_formed
+                        let name = user_local_name(x);
+                        return error(
+                            &expr.span,
+                            format!("the variable `{name:}` is not marked mutable"),
+                        );
+                    }
+                }
+            }
+            Ok(expr.clone())
         }
         ExprX::Call(CallTarget::Static(tgt, typs), args) => {
             // Remove FnSpec type arguments
@@ -740,7 +778,7 @@ fn simplify_function(
         &function,
         &mut map,
         state,
-        &|state, _, expr| simplify_one_expr(ctx, state, expr),
+        &|state, scope_map, expr| simplify_one_expr(ctx, state, scope_map, expr),
         &|state, _, stmt| simplify_one_stmt(ctx, state, stmt),
         &|state, typ| simplify_one_typ(&local, state, typ),
     )
