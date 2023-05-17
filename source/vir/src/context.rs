@@ -72,6 +72,8 @@ pub struct Ctx {
     pub(crate) mono_types: Vec<MonoTyp>,
     pub(crate) lambda_types: Vec<usize>,
     pub(crate) bound_traits: HashSet<Path>,
+    pub(crate) fndef_types: Vec<Fun>,
+    pub(crate) fndef_type_set: HashSet<Fun>,
     pub functions: Vec<Function>,
     pub func_map: HashMap<Fun, Function>,
     // Ensure a unique identifier for each quantifier in a given function
@@ -166,6 +168,7 @@ fn datatypes_invs(
                                 }
                             }
                         }
+                        TypX::FnDef(..) => {}
                         TypX::Decorate(..) => unreachable!("TypX::Decorate"),
                         TypX::Boxed(_) => {}
                         TypX::TypeId => {}
@@ -260,14 +263,15 @@ impl GlobalCtx {
         for f in &krate.functions {
             fun_bounds.insert(f.x.name.clone(), f.x.typ_bounds.clone());
             func_call_graph.add_node(Node::Fun(f.x.name.clone()));
+            func_call_graph.add_node(Node::Exec(f.x.name.clone()));
             crate::recursion::expand_call_graph(&func_map, &mut func_call_graph, f)?;
         }
 
         func_call_graph.compute_sccs();
         let func_call_sccs = func_call_graph.sort_sccs();
         for f in &krate.functions {
+            let f_node = Node::Fun(f.x.name.clone());
             if f.x.attrs.is_decrease_by {
-                let f_node = Node::Fun(f.x.name.clone());
                 for g_node in func_call_graph.get_scc_nodes(&f_node) {
                     if f_node != g_node {
                         let g =
@@ -281,10 +285,15 @@ impl GlobalCtx {
                 }
             }
             if f.x.attrs.atomic {
-                let f_node = Node::Fun(f.x.name.clone());
-                if func_call_graph.node_is_in_cycle(&f_node) {
-                    return Err(error(&f.span, "'atomic' cannot be used on a recursive function"));
+                let exec_node = Node::Exec(f.x.name.clone());
+                if func_call_graph.node_is_in_cycle(&exec_node) {
+                    return Err(error(&f.span,
+                        "'atomic' cannot be used on a recursive function"));
                 }
+            }
+            if f.x.mode == Mode::Exec && func_call_graph.node_is_in_cycle(&f_node) {
+                return Err(error(&f.span,
+                    "cyclic dependency in the requires/ensures of this function"));
             }
         }
         let qid_map = RefCell::new(HashMap::new());
@@ -347,6 +356,7 @@ impl Ctx {
         mono_types: Vec<MonoTyp>,
         lambda_types: Vec<usize>,
         bound_traits: HashSet<Path>,
+        fndef_types: Vec<Fun>,
         debug: bool,
     ) -> Result<Self, VirErr> {
         let mut datatype_is_transparent: HashMap<Path, bool> = HashMap::new();
@@ -373,6 +383,12 @@ impl Ctx {
         }
         let quantifier_count = Cell::new(0);
         let string_hashes = RefCell::new(HashMap::new());
+
+        let mut fndef_type_set = HashSet::new();
+        for fndef_type in fndef_types.iter() {
+            fndef_type_set.insert(fndef_type.clone());
+        }
+
         Ok(Ctx {
             module,
             datatype_is_transparent,
@@ -380,6 +396,8 @@ impl Ctx {
             mono_types,
             lambda_types,
             bound_traits,
+            fndef_types,
+            fndef_type_set,
             functions,
             func_map,
             quantifier_count,

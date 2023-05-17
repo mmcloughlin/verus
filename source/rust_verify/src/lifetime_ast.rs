@@ -48,6 +48,7 @@ pub(crate) enum TypX {
         name: Id,
     },
     Closure,
+    FnDef,
 }
 
 pub(crate) type Pattern = Box<(Span, PatternX)>;

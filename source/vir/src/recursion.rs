@@ -1,9 +1,11 @@
 use crate::ast::{
-    AutospecUsage, CallTarget, Constant, ExprX, Fun, Function, FunctionKind, GenericBoundX,
-    IntRange, MaskSpec, Path, SpannedTyped, Typ, TypX, Typs, UnaryOpr, VirErr,
+    AutospecUsage, BuiltinSpecFun, CallTarget, Constant, ExprX, Fun, Function,
+    FunctionKind, GenericBoundX, IntRange, MaskSpec, Mode, Path, SpannedTyped, Typ, TypX, Typs,
+    UnaryOpr, VirErr,
 };
 use crate::ast_to_sst::expr_to_exp_skip_checks;
 use crate::ast_util::typ_to_diagnostic_str;
+use crate::ast_visitor::FunctionPlace;
 use crate::context::Ctx;
 use crate::def::{
     decrease_at_entry, suffix_rename, unique_bound, unique_local, CommandsWithContext, Spanned,
@@ -27,7 +29,11 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Node {
+    // For spec, proof functions, Fun node represents the entire function
+    // For exec functions, Fun node represents just the requires/ensures
     Fun(Fun),
+    // For exec functions, represents the body
+    Exec(Fun),
     Datatype(Path),
     Trait(Path),
     TraitImpl(Path),
@@ -457,9 +463,19 @@ pub(crate) fn expand_call_graph(
         call_graph.add_edge(f_node.clone(), Node::Fun(decrease_by.clone()))
     }
 
+    // For exec functions, the requires/ensures and the body gets a different node
+    let internal_node = match function.x.mode {
+        Mode::Exec => Node::Exec(function.x.name.clone()),
+        Mode::Proof | Mode::Spec => f_node.clone(),
+    };
+
     // Add f --> f2 edges where f calls f2
     // Add f --> D: T where one of f's expressions instantiates A: T with D: T
-    crate::ast_visitor::function_visitor_check::<VirErr, _>(function, &mut |expr| {
+    crate::ast_visitor::function_visitor_check::<VirErr, _>(function, &mut |fp, expr| {
+        let f_node = match fp {
+            FunctionPlace::Internal => &internal_node,
+            FunctionPlace::Signature => &f_node,
+        };
         match &expr.x {
             ExprX::Call(CallTarget::Fun(kind, x, _ts, impl_paths, autospec), _) => {
                 assert!(*autospec == AutospecUsage::Final);
@@ -489,8 +505,69 @@ pub(crate) fn expand_call_graph(
                     call_graph.add_edge(f_node.clone(), Node::TraitImpl(impl_path.clone()));
                 }
 
-                // f --> f2
-                call_graph.add_edge(f_node.clone(), Node::Fun(callee.clone()))
+                if fp == FunctionPlace::Internal && function.x.mode == Mode::Exec {
+                    // TODO don't need to add edge if the callee isn't exec?
+
+                    // exec body of f --> exec body of f2
+                    call_graph.add_edge(f_node.clone(), Node::Exec(callee.clone()))
+                } else {
+                    // f --> f2
+                    call_graph.add_edge(f_node.clone(), Node::Fun(callee.clone()))
+                }
+            }
+            ExprX::Call(CallTarget::BuiltinSpecFun(bsf, typs, impl_paths), _)
+                if !(fp == FunctionPlace::Internal && function.x.mode == Mode::Exec)
+            => {
+                for impl_path in impl_paths.iter() {
+                    call_graph.add_edge(f_node.clone(), Node::TraitImpl(impl_path.clone()));
+                }
+
+                match bsf {
+                    BuiltinSpecFun::StaticReq(_) | BuiltinSpecFun::StaticEns(_) => {
+                        // In principle, we could handle this like the FnDef case below.
+                        return Err(error(
+                            &expr.span,
+                            "Verus Internal Error: StaticReq and StaticEns shouldn't exist at this point",
+                        ));
+                    }
+                    BuiltinSpecFun::ClosureReq | BuiltinSpecFun::ClosureEns => {
+                        // This is effectively the trait bound
+                        // `T: FnWithSpecification` for some type T
+                        let typ = crate::ast_util::undecorate_typ(&typs[0]);
+                        match &*typ {
+                            TypX::FnDef(fun, _typs) => {
+                                // Here, `T = FnDef(fun)`    (fun is an exec-mode function)
+                                // Such a trait bound could be represented by a dictionary with the requires/ensures of func
+                                // Therefore, we just point to the node representing the requires/ensures of func
+                                let callee = Node::Fun(fun.clone());
+                                call_graph.add_edge(f_node.clone(), callee);
+                            }
+                            TypX::TypParam(p) if p == &crate::def::trait_self_type_param() => {
+                                return Err(error(&expr.span, "unsupported use of Self type"));
+                            }
+                            TypX::TypParam(_p) => {
+                                // TODO check that 'p' has the desired bound
+                                /*
+                                let bound = function.x.typ_bounds.iter().find(|(q, _)| q == p);
+                                let bound = bound.expect("missing type parameter");
+                                let GenericBoundX::Traits(ts) = &*bound.1;
+                                assert!(ts.iter().any(|t| t == trait_path2));
+                                */
+                            }
+                            _ => {
+                                // I don't think this can happen with our current supported
+                                // feature set. Right now, besides FnDef, we only support
+                                // ClosureReq/ClosureEns for the 'anonymous closure' type.
+                                // But that can only happen in the body of an exec function, which
+                                // right now, we aren't traversing.
+                                return Err(error(
+                                    &expr.span,
+                                    "calling requires/ensures not supported here for this type",
+                                ));
+                            }
+                        }
+                    }
+                }
             }
             ExprX::Fuel(callee, fuel) if *fuel >= 1 => {
                 let f2 = &func_map[callee];

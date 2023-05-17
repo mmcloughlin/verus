@@ -19,19 +19,18 @@ use air::ast_util::{
 };
 use std::sync::Arc;
 
-fn datatype_to_air(ctx: &Ctx, datatype: &crate::ast::Datatype) -> air::ast::Datatype {
-    let mut variants: Vec<air::ast::Variant> = Vec::new();
-    for variant in datatype.x.variants.iter() {
+fn datatype_to_air(ctx: &Ctx, path: &Path, variants: &crate::ast::Variants) -> air::ast::Datatype {
+    let mut air_variants: Vec<air::ast::Variant> = Vec::new();
+    for variant in variants.iter() {
         let mut fields: Vec<air::ast::Field> = Vec::new();
         for field in variant.a.iter() {
-            let id =
-                variant_field_ident_internal(&datatype.x.path, &variant.name, &field.name, true);
+            let id = variant_field_ident_internal(path, &variant.name, &field.name, true);
             fields.push(ident_binder(&id, &typ_to_air(ctx, &field.a.0)));
         }
-        let id = variant_ident(&datatype.x.path, &variant.name);
-        variants.push(ident_binder(&id, &Arc::new(fields)));
+        let id = variant_ident(path, &variant.name);
+        air_variants.push(ident_binder(&id, &Arc::new(fields)));
     }
-    Arc::new(air::ast::BinderX { name: path_to_air_ident(&datatype.x.path), a: Arc::new(variants) })
+    Arc::new(air::ast::BinderX { name: path_to_air_ident(path), a: Arc::new(air_variants) })
 }
 
 pub fn is_datatype_transparent(source_module: &Path, datatype: &crate::ast::Datatype) -> bool {
@@ -65,6 +64,7 @@ fn uses_ext_equal(ctx: &Ctx, typ: &Typ) -> bool {
             panic!("internal error: AnonymousClosure should have been removed by ast_simplify")
         }
         TypX::Datatype(path, _, _) => ctx.datatype_map[path].x.ext_equal,
+        TypX::FnDef(..) => false,
         TypX::Decorate(_, t) => uses_ext_equal(ctx, t),
         TypX::Boxed(typ) => uses_ext_equal(ctx, typ),
         TypX::TypParam(_) => true,
@@ -645,7 +645,11 @@ pub fn datatypes_and_primitives_to_air(ctx: &Ctx, datatypes: &crate::ast::Dataty
 
         if is_transparent {
             // Encode transparent types as AIR datatypes
-            transparent_air_datatypes.push(datatype_to_air(ctx, datatype));
+            transparent_air_datatypes.push(datatype_to_air(
+                ctx,
+                &datatype.x.path,
+                &datatype.x.variants,
+            ));
         }
 
         let mut tparams: Vec<Ident> = Vec::new();
@@ -672,6 +676,43 @@ pub fn datatypes_and_primitives_to_air(ctx: &Ctx, datatypes: &crate::ast::Dataty
             is_transparent && datatype.x.ext_equal,
         );
     }
+
+    for fun in &ctx.fndef_types {
+        // Create a singleton datatype, similar to the unit type
+
+        let dpath = crate::def::prefix_fndef_type(fun);
+
+        let variants = Arc::new(vec![Arc::new(air::ast::BinderX {
+            name: Arc::new(crate::def::VARIANT_FNDEF_SINGLETON.to_string()),
+            a: Arc::new(vec![]),
+        })]);
+
+        transparent_air_datatypes.push(datatype_to_air(ctx, &dpath, &variants));
+
+        let func = ctx.func_map.get(fun).expect("expected fndef function in pruned crate");
+        let tparams = &func.x.typ_params;
+        let typ_args = Arc::new(vec_map(&**tparams, |t| Arc::new(TypX::TypParam(t.clone()))));
+
+        datatype_or_fun_to_air_commands(
+            ctx,
+            &mut field_commands,
+            &mut token_commands,
+            &mut box_commands,
+            &mut axiom_commands,
+            &func.span,
+            &dpath,
+            &str_typ(&path_to_air_ident(&dpath)),
+            None,
+            Some(Arc::new(TypX::FnDef(fun.clone(), typ_args))),
+            tparams,
+            &variants,
+            false,
+            true,
+            false,
+            false,
+        );
+    }
+
     let mut commands: Vec<Command> = Vec::new();
     commands.append(&mut opaque_sort_commands);
     commands.push(Arc::new(CommandX::Global(Arc::new(DeclX::Datatypes(Arc::new(
@@ -681,5 +722,6 @@ pub fn datatypes_and_primitives_to_air(ctx: &Ctx, datatypes: &crate::ast::Dataty
     commands.append(&mut token_commands);
     commands.append(&mut box_commands);
     commands.append(&mut axiom_commands);
+
     Arc::new(commands)
 }

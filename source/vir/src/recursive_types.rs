@@ -115,6 +115,14 @@ fn check_well_founded_typ(
             // and rely on type_graph to reject any cycles
             true
         }
+        TypX::FnDef(_path, _type_args) => {
+            // I don't think there's any way to refer to explicitly refer to these types in
+            // Rust code, so it shouldn't be possible to use on in a struct definition
+            // or anything.
+            // Though this type is basically a named singleton type, so
+            // the correct result here would probably be `Ok(true)`
+            panic!("FnDef type is not expected in struct definitions");
+        }
         TypX::AnonymousClosure(..) => {
             unimplemented!();
         }
@@ -219,6 +227,9 @@ fn check_positive_uses(
                 check_positive_uses(global, local, polarity, t)?;
             }
             Ok(())
+        }
+        TypX::FnDef(_path, _type_args) => {
+            panic!("FnDef type is not expected in struct definitions");
         }
         TypX::Boxed(t) => check_positive_uses(global, local, polarity, t),
         TypX::TypParam(x) => {
@@ -420,7 +431,7 @@ fn scc_error(krate: &Krate, head: &Node, nodes: &Vec<Node>) -> VirErr {
             }
         };
         match node {
-            Node::Fun(fun) => {
+            Node::Fun(fun) | Node::Exec(fun) => {
                 if let Some(f) = krate.functions.iter().find(|f| f.x.name == *fun) {
                     let span = f.span.clone();
                     push(node, span);

@@ -563,7 +563,7 @@ fn check_expr_handle_mut_arg(
             }
             Ok(Mode::Spec)
         }
-        ExprX::Call(CallTarget::BuiltinSpecFun(_f, _typs), es) => {
+        ExprX::Call(CallTarget::BuiltinSpecFun(_f, _typs, _impl_paths), es) => {
             if typing.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
                 return Err(error(&expr.span, "cannot call spec function from exec mode"));
             }
@@ -766,6 +766,20 @@ fn check_expr_handle_mut_arg(
 
             typing.vars.pop_scope();
             Ok(Mode::Exec)
+        }
+        ExprX::ExecFnByName(fun) => {
+            let function = typing.funs.get(fun).unwrap();
+            if function.x.mode != Mode::Exec {
+                // Could probably support 'proof' functions (in ghost code) as well
+                return Err(error(
+                    &expr.span,
+                    "cannot use a function as a value unless it as mode 'exec'",
+                ));
+            }
+
+            typing.erasure_modes.var_modes.push((expr.span.clone(), Mode::Exec));
+
+            Ok(outer_mode)
         }
         ExprX::Choose { params, cond, body } => {
             if typing.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {

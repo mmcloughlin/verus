@@ -598,7 +598,35 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
         TyKind::Alias(rustc_middle::ty::AliasKind::Weak, _) => {
             unsupported_err!(span, "opaque type")
         }
+        TyKind::FnDef(def_id, args) => {
+            let mut typ_args: Vec<(Typ, bool)> = Vec::new();
+            for arg in args.iter() {
+                match arg.unpack() {
+                    rustc_middle::ty::GenericArgKind::Type(t) => {
+                        typ_args.push(mid_ty_to_vir_ghost(
+                            tcx,
+                            verus_items,
+                            param_env_src,
+                            span,
+                            &t,
+                            as_datatype,
+                            allow_mut_ref,
+                        )?);
+                    }
+                    rustc_middle::ty::GenericArgKind::Lifetime(_) => {}
+                    rustc_middle::ty::GenericArgKind::Const(cnst) => {
+                        typ_args.push((mid_ty_const_to_vir(tcx, Some(span), &cnst)?, false));
+                    }
+                }
+            }
+            let typ_args = typ_args.into_iter().map(|(t, _)| t).collect();
+            let path = def_id_to_vir_path(tcx, verus_items, *def_id);
+            let fun = Arc::new(vir::ast::FunX { path });
+            let typx = TypX::FnDef(fun, Arc::new(typ_args));
+            (Arc::new(typx), false)
+        }
         TyKind::Char => (Arc::new(TypX::Char), false),
+
         TyKind::Float(..) => unsupported_err!(span, "floating point types"),
         TyKind::Foreign(..) => unsupported_err!(span, "foreign types"),
         TyKind::Str => unsupported_err!(span, "str type"),
@@ -606,7 +634,6 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
         TyKind::Ref(_, _, rustc_ast::Mutability::Mut) => {
             unsupported_err!(span, "&mut types, except in special cases")
         }
-        TyKind::FnDef(..) => unsupported_err!(span, "anonymous function types"),
         TyKind::FnPtr(..) => unsupported_err!(span, "function pointer types"),
         TyKind::Dynamic(..) => unsupported_err!(span, "dynamic types"),
         TyKind::Generator(..) => unsupported_err!(span, "generator types"),

@@ -159,6 +159,9 @@ pub enum TypX {
     Lambda(Typs, Typ),
     /// Executable function types (with a requires and ensures)
     AnonymousClosure(Typs, Typ, usize),
+    /// Corresponds to Rust's FnDef type
+    /// Typs are generic type args
+    FnDef(Fun, Typs),
     /// Datatype (concrete or abstract) applied to type arguments
     Datatype(Path, Typs, ImplPaths),
     /// Wrap type with extra information relevant to Rust but usually irrelevant to SMT encoding
@@ -513,10 +516,16 @@ pub struct LoopInvariant {
     pub inv: Expr,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, ToDebugSNode)]
+#[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode)]
 pub enum BuiltinSpecFun {
+    // Note that this now applies to any supported function type, e.g., FnDef types,
+    // not just "closure" types. TODO rename?
     ClosureReq,
     ClosureEns,
+    // Represented req%fn_name and ens%fn_name in AIR.
+    // Only used internally
+    StaticReq(Fun),
+    StaticEns(Fun),
 }
 
 /// Path of each impl that is used to satisfy a trait bound when instantiating the type parameter
@@ -540,7 +549,7 @@ pub enum CallTarget {
     /// Call a dynamically computed FnSpec (no type arguments allowed),
     /// where the function type is specified by the GenericBound of typ_param.
     FnSpec(Expr),
-    BuiltinSpecFun(BuiltinSpecFun, Typs),
+    BuiltinSpecFun(BuiltinSpecFun, Typs, ImplPaths),
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, ToDebugSNode, PartialEq, Eq, Hash)]
@@ -644,6 +653,8 @@ pub enum ExprX {
     },
     /// Array literal (can also be used for sequence literals in the future)
     ArrayLiteral(Exprs),
+    /// Executable function (declared with 'fn' and referred to by name)
+    ExecFnByName(Fun),
     /// Choose specification values satisfying a condition, compute body
     Choose { params: Binders<Typ>, cond: Expr, body: Expr },
     /// Manually supply triggers for body of quantifier
@@ -863,6 +874,11 @@ pub struct FunctionX {
     /// For broadcast_forall functions, poly sets this to Some((params, reqs ==> enss))
     /// where params and reqs ==> enss use coerce_typ_to_poly rather than coerce_typ_to_native
     pub broadcast_forall: Option<(Params, Expr)>,
+    /// Axioms (similar to broadcast axioms) for the FnDef type corresponding to
+    /// this function, if one is generated for this particular function.
+    /// Similar to 'external_spec' in the ExecClosure node, this is filled
+    /// in during ast_simplify.
+    pub fndef_axioms: Option<Exprs>,
     /// MaskSpec that specifies what invariants the function is allowed to open
     pub mask_spec: MaskSpec,
     /// Allows the item to be a const declaration or static

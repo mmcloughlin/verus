@@ -61,6 +61,7 @@ const PREFIX_PROJECT: &str = "proj%";
 const PREFIX_PROJECT_DECORATION: &str = "proj%%";
 const PREFIX_TRAIT_BOUND: &str = "tr_bound%";
 const PREFIX_STATIC: &str = "static%";
+const PREFIX_FNDEF_TYPE: &str = "fndef%";
 const SLICE_TYPE: &str = "slice%";
 const ARRAY_TYPE: &str = "array%";
 const PREFIX_SNAPSHOT: &str = "snap%";
@@ -85,6 +86,8 @@ pub const SUFFIX_SNAP_WHILE_BEGIN: &str = "_while_begin";
 pub const SUFFIX_SNAP_WHILE_END: &str = "_while_end";
 
 pub const CLOSURE_RETURN_VALUE_PREFIX: &str = "%closure_return";
+
+pub const VARIANT_FNDEF_SINGLETON: &str = "fndef_single%";
 
 // List of constant strings that can appear in generated AIR code
 pub const FUEL_ID: &str = "FuelId";
@@ -378,12 +381,27 @@ pub fn prefix_type_id_fun(i: usize) -> Ident {
     prefix_type_id(&prefix_lambda_type(i))
 }
 
+pub fn prefix_fndef_type(fun: &Fun) -> Path {
+    let krate: Option<Ident> = fun.path.krate.clone();
+    let mut segments: Vec<Ident> = (*fun.path.segments).clone();
+    segments.insert(0, Arc::new(PREFIX_FNDEF_TYPE.to_string()));
+    Arc::new(PathX { krate, segments: Arc::new(segments) })
+}
+
 pub fn prefix_box(ident: &Path) -> Ident {
     Arc::new(PREFIX_BOX.to_string() + &path_to_string(ident))
 }
 
 pub fn prefix_unbox(ident: &Path) -> Ident {
     Arc::new(PREFIX_UNBOX.to_string() + &path_to_string(ident))
+}
+
+pub fn prefix_fndef_box(fun: &Fun) -> Ident {
+    prefix_box(&prefix_fndef_type(fun))
+}
+
+pub fn prefix_fndef_unbox(fun: &Fun) -> Ident {
+    prefix_unbox(&prefix_fndef_type(fun))
 }
 
 pub fn prefix_fuel_id(ident: &Ident) -> Ident {

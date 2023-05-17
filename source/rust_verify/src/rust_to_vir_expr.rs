@@ -1402,8 +1402,10 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
                     let fun = FunX { path };
                     mk_expr(ExprX::StaticVar(Arc::new(fun)))
                 }
-                Res::Def(DefKind::Fn | DefKind::AssocFn, _) => {
-                    unsupported_err!(expr.span, "using functions as values");
+                Res::Def(DefKind::Fn, id) | Res::Def(DefKind::AssocFn, id) => {
+                    let path = def_id_to_vir_path(tcx, &bctx.ctxt.verus_items, id);
+                    let fun = Arc::new(vir::ast::FunX { path });
+                    mk_expr(ExprX::ExecFnByName(fun))
                 }
                 Res::Def(DefKind::ConstParam, id) => {
                     let gparam = if let Some(local_id) = id.as_local() {

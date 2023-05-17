@@ -7,7 +7,7 @@ use crate::ast::{
     Constant, Datatype, DatatypeTransparency, DatatypeX, Expr, ExprX, Exprs, Field, FieldOpr,
     Function, FunctionKind, Ident, IntRange, ItemKind, Krate, KrateX, Mode, MultiOp, Path, Pattern,
     PatternX, SpannedTyped, Stmt, StmtX, TraitImpl, Typ, TypX, UnaryOp, UnaryOpr, VirErr,
-    Visibility,
+    Visibility, Fun,
 };
 use crate::ast_util::int_range_from_type;
 use crate::ast_util::is_integer_type;
@@ -24,7 +24,7 @@ use air::ast::BinderX;
 use air::ast::Binders;
 use air::ast_util::ident_binder;
 use air::scope_map::ScopeMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 struct State {
@@ -34,11 +34,18 @@ struct State {
     tuple_typs: HashMap<usize, Path>,
     // Name of a datatype to represent each tuple arity
     closure_typs: HashMap<usize, Path>,
+    // Functions for which the corresponding FnDef type is used
+    fndef_typs: HashSet<Fun>,
 }
 
 impl State {
     fn new() -> Self {
-        State { next_var: 0, tuple_typs: HashMap::new(), closure_typs: HashMap::new() }
+        State {
+            next_var: 0,
+            tuple_typs: HashMap::new(),
+            closure_typs: HashMap::new(),
+            fndef_typs: HashSet::new(),
+        }
     }
 
     fn reset_for_function(&mut self) {
@@ -564,6 +571,10 @@ fn simplify_one_typ(local: &LocalCtxt, state: &mut State, typ: &Typ) -> Result<T
             let path = state.closure_type_name(*id);
             Ok(Arc::new(TypX::Datatype(path, Arc::new(vec![]), Arc::new(vec![]))))
         }
+        TypX::FnDef(fun, _typs) => {
+            state.fndef_typs.insert(fun.clone());
+            Ok(typ.clone())
+        }
         TypX::TypParam(x) => {
             if !local.typ_params.contains(x) {
                 return Err(error(
@@ -576,6 +587,9 @@ fn simplify_one_typ(local: &LocalCtxt, state: &mut State, typ: &Typ) -> Result<T
         _ => Ok(typ.clone()),
     }
 }
+
+// TODO: a lot of this closure stuff could get its own file
+// rename to apply to all fn types, not just closure types
 
 fn closure_trait_call_typ_args(state: &mut State, fn_val: &Expr, params: &Binders<Typ>) -> Typs {
     let path = state.tuple_type_name(params.len());
@@ -601,6 +615,7 @@ fn mk_closure_req_call(
             CallTarget::BuiltinSpecFun(
                 BuiltinSpecFun::ClosureReq,
                 closure_trait_call_typ_args(state, fn_val, params),
+                Arc::new(vec![]),
             ),
             Arc::new(vec![fn_val.clone(), arg_tuple.clone()]),
         ),
@@ -623,6 +638,7 @@ fn mk_closure_ens_call(
             CallTarget::BuiltinSpecFun(
                 BuiltinSpecFun::ClosureEns,
                 closure_trait_call_typ_args(state, fn_val, params),
+                Arc::new(vec![]),
             ),
             Arc::new(vec![fn_val.clone(), arg_tuple.clone(), ret_arg.clone()]),
         ),
@@ -775,6 +791,66 @@ fn exec_closure_spec(
     }
 }
 
+fn add_fndef_axioms_to_function(
+    _ctx: &GlobalCtx,
+    state: &mut State,
+    function: &Function,
+) -> Result<Function, VirErr> {
+    state.reset_for_function();
+
+    let params: Vec<_> = function
+        .x
+        .params
+        .iter()
+        .map(|p| Arc::new(BinderX { name: p.x.name.clone(), a: p.x.typ.clone() }))
+        .collect();
+    let params = Arc::new(params);
+
+    let typ_args: Vec<_> =
+        function.x.typ_params.iter().map(|tp| Arc::new(TypX::TypParam(tp.clone()))).collect();
+    let typ_args = Arc::new(typ_args);
+
+    let fun = &function.x.name;
+
+    let fndef_singleton = SpannedTyped::new(
+        &function.span,
+        &Arc::new(TypX::FnDef(fun.clone(), typ_args)),
+        ExprX::ExecFnByName(fun.clone()),
+    );
+
+    let req_forall = exec_closure_spec_requires(
+        state,
+        &function.span,
+        &fndef_singleton,
+        &params,
+        &function.x.require,
+    )?;
+
+    let mut fndef_axioms = vec![req_forall];
+
+    if function.x.ensure.len() > 0 {
+        let ret = Arc::new(BinderX {
+            name: function.x.ret.x.name.clone(),
+            a: function.x.ret.x.typ.clone(),
+        });
+
+        let ens_forall = exec_closure_spec_ensures(
+            state,
+            &function.span,
+            &fndef_singleton,
+            &params,
+            &ret,
+            &function.x.ensure,
+        )?;
+        fndef_axioms.push(ens_forall);
+    }
+
+    let mut functionx = function.x.clone();
+    assert!(functionx.fndef_axioms.is_none());
+    functionx.fndef_axioms = Some(Arc::new(fndef_axioms));
+    Ok(Spanned::new(function.span.clone(), functionx))
+}
+
 fn simplify_function(
     ctx: &GlobalCtx,
     state: &mut State,
@@ -907,6 +983,14 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
     let trait_impls = vec_map_result(&trait_impls, |t| simplify_trait_impl(&mut state, t))?;
     let assoc_type_impls =
         vec_map_result(&assoc_type_impls, |a| simplify_assoc_type_impl(&mut state, a))?;
+
+    let functions = vec_map_result(&functions, |f: &Function| {
+        if state.fndef_typs.contains(&f.x.name) {
+            add_fndef_axioms_to_function(ctx, &mut state, f)
+        } else {
+            Ok(f.clone())
+        }
+    })?;
 
     // Add a generic datatype to represent each tuple arity
     // Iterate in sorted order to get consistent output
