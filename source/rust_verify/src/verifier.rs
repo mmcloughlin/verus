@@ -484,8 +484,78 @@ impl Verifier {
                         invalidity = true;
                     }
                     if !self.expand_flag || vir::split_expression::is_split_error(&error) {
-                        reporter.report_as(&error, level);
+                        if !self.expand_flag {
+                            reporter.report_as(&error, level);
+                        } else {
+                            // if !compact
+                            // oringinal
+                            reporter.report_as(&error, MessageLevel::Note);
+
+
+
+                            // else
+                            // print compact errors
+                            let mut atom_error:Message = air::messages::message_bare(
+                                MessageLevel::Note,
+                                "error: internal error",
+                            );
+                            
+                            let mut compact = String::from("Split error trace:");
+                            // compact.push_str(&error.note.as_str());
+                            if let Some(most_localized) = error.spans.last() {
+                                // compact.push_str("  ");
+                                // compact.push_str(format!("[{}]", most_localized.as_string).as_str());
+                                atom_error = message(MessageLevel::Note, error.note.clone(), most_localized);
+                                //Message::error(most_localized, error.note.clone());
+                                for label in error.labels.iter() {
+                                    if most_localized.as_string == label.span.as_string {
+                                        // compact.push_str("  ");
+                                        // compact.push_str(&label.note.as_str());
+                                        atom_error = atom_error.secondary_label(most_localized, label.note.clone());
+                                    }
+                                }
+                            }
+                            for label in error.labels.iter() {
+                                if !compact.contains(label.span.as_string.as_str()) {
+                                    compact.push_str("\n  ");
+                                    compact.push_str(&label.span.as_string);
+                                    compact.push_str(&label.note.as_str());
+
+                                    if label.note.contains("Note:") {
+                                        atom_error = atom_error.secondary_label(atom_error.spans.first().unwrap(), label.note.clone());
+                                        // atom_error = atom_error.help(label.note.clone());
+                                    }
+                                }
+                            }
+                            for span in error.spans.iter() {
+                                if !compact.contains(&span.as_string) {
+                                    compact.push_str("\n  ");
+                                    compact.push_str(&span.as_string);
+                                }
+                            }
+
+                            // reporter.report(&note(error.note.clone(), &error.labels[0].span));
+                            // dbg!(&error);
+                            dbg!(&error.labels);
+                            dbg!(&error.spans);
+                            dbg!(&error.note);
+                            dbg!(&error.help);
+                            dbg!(&error.level);
+
+                            atom_error = atom_error.help(compact);
+                            reporter.report(&atom_error);
+
+                            
+                            // reporter.report(&air::messages::message_bare(
+                            //     MessageLevel::Note,
+                            //     compact,
+                            // ));
+
+                        }
                     }
+                    // if !self.expand_flag || vir::split_expression::is_split_error(&error) {
+                    //     reporter.report_as(&error, level);
+                    // }
 
                     if level == MessageLevel::Error {
                         if self.args.expand_errors {
