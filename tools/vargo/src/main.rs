@@ -214,8 +214,15 @@ fn run() -> Result<(), String> {
             .map_err(|_| format!("rustup output is invalid utf8"))?;
         let mut captures = active_toolchain_re.captures_iter(&stdout);
         if let Some(cap) = captures.next() {
-            let channel = &cap[2];
+            let mut channel = &cap[2];
             let toolchain = cap[1].to_string();
+            if !channel.starts_with("nightly") {
+                channel = channel
+                    .split("-")
+                    .next()
+                    .expect(&format!("unexpected channel {}", channel))
+                    .into();
+            }
             if rust_toolchain_toml_channel != channel {
                 return Err(format!("rustup is using a toolchain with channel {channel}, we expect {rust_toolchain_toml_channel}\ndo you have a rustup override set?"));
             }

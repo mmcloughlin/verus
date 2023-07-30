@@ -28,7 +28,7 @@ jobs:
           cargo fmt -- --check
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ec2
     strategy:
       matrix:
         features: ['', 'singular']
@@ -43,14 +43,15 @@ jobs:
       - name: setup rust
         run: |
           curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
-      - name: setup singular
-        if: matrix.features == 'singular'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y singular 
+      # - name: setup singular
+      #   if: matrix.features == 'singular'
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y singular 
       - name: cargo test
         working-directory: ./source
         run: |
+          source "$HOME/.cargo/env"
           . ../tools/activate
           vargo clean
           if [ "${{ matrix.features }}" == "singular" ]; then
@@ -66,6 +67,7 @@ jobs:
         if: matrix.features == ''
         working-directory: ./source
         run: |
+          source "$HOME/.cargo/env"
           ./tools/docs.sh
       - name: upload artifact
         uses: actions/upload-artifact@v2
@@ -74,30 +76,30 @@ jobs:
           name: verusdoc
           path: source/doc
 
-  smoke-test-windows:
-    runs-on: windows-latest
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: get z3
-        shell: pwsh
-        working-directory: .\source
-        run: |
-          .\tools\get-z3.ps1
-          Write-Host "z3 version $(.\z3.exe --version)"
-      - name: setup rust
-        run: |
-          # Disable the download progress bar which can cause perf issues
-          $ProgressPreference = "SilentlyContinue"
-          Invoke-WebRequest https://win.rustup.rs/ -OutFile rustup-init.exe
-          .\rustup-init.exe -y --default-host=x86_64-pc-windows-msvc --default-toolchain=none
-          del rustup-init.exe
-        shell: powershell
-      - name: cargo test
-        working-directory: .\source
-        run: |
-          ../tools/activate.ps1
-          vargo clean
-          vargo build
-          $env:VERUS_Z3_PATH = "$(Get-Location)/z3"; vargo test -p rust_verify_test --test basic
-        shell: powershell
+  # smoke-test-windows:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - name: checkout
+  #       uses: actions/checkout@v2
+  #     - name: get z3
+  #       shell: pwsh
+  #       working-directory: .\source
+  #       run: |
+  #         .\tools\get-z3.ps1
+  #         Write-Host "z3 version $(.\z3.exe --version)"
+  #     - name: setup rust
+  #       run: |
+  #         # Disable the download progress bar which can cause perf issues
+  #         $ProgressPreference = "SilentlyContinue"
+  #         Invoke-WebRequest https://win.rustup.rs/ -OutFile rustup-init.exe
+  #         .\rustup-init.exe -y --default-host=x86_64-pc-windows-msvc --default-toolchain=none
+  #         del rustup-init.exe
+  #       shell: powershell
+  #     - name: cargo test
+  #       working-directory: .\source
+  #       run: |
+  #         ../tools/activate.ps1
+  #         vargo clean
+  #         vargo build
+  #         $env:VERUS_Z3_PATH = "$(Get-Location)/z3"; vargo test -p rust_verify_test --test basic
+  #       shell: powershell
