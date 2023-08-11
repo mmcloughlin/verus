@@ -146,24 +146,7 @@ impl<K, V> Map<K, V> {
         )
     }
 
-    // Proven lemmas
-
-    /// Removing a key from a map that previously contained that key decreases 
-    /// the map's length by one
-    pub proof fn lemma_remove_key_len(self, key: K)
-        requires
-            self.dom().contains(key),
-            self.dom().finite(),
-        ensures
-            self.dom().len() == 1 + self.remove(key).dom().len(),
-    {}
-
-    /// The domain of a map after removing a key is equivalent to removing the key from 
-    /// the domain of the original map.
-    pub proof fn lemma_remove_equivalency(self, key: K)
-        ensures
-            self.remove(key).dom() == self.dom().remove(key),
-    {}    
+    // Proven lemmas 
 
     /// Removing a set of n keys from a map that previously contained all n keys
     /// results in a domain of size n less than the original domain.

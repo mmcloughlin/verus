@@ -353,18 +353,6 @@ impl<A> Set<A> {
         lemma_len_intersect::<A>(self, Set::new(f));
     }
 
-    /// In a pre-ordered set, a greatest element is necessarily maximal.
-    pub proof fn lemma_greatest_implies_maximal(self, r: FnSpec(A,A) -> bool, max: A)
-        requires pre_ordering(r),
-        ensures is_greatest(r, max, self) ==> is_maximal(r, max, self),
-    {}
-
-    /// In a pre-ordered set, a least element is necessarily minimal.
-    pub proof fn lemma_least_implies_minimal(self, r: FnSpec(A,A) -> bool, min: A)
-        requires pre_ordering(r),
-        ensures is_least(r, min, self) ==> is_minimal(r, min, self),
-    {}
-
     /// In a totally-ordered set, an element is maximal if and only if it is a greatest element.
     pub proof fn lemma_maximal_equivalent_greatest(self, r: FnSpec(A,A) -> bool, max: A)
         requires total_ordering(r),
