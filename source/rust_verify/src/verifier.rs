@@ -155,6 +155,9 @@ pub struct ModuleStats {
     pub time_smt_run: Duration,
     /// total time to verify the module
     pub time_verify: Duration,
+    /// tracking time of context before the module enters 
+    /// function verification loop
+    pub unaccounted_smt_run_time : Duration,
 }
 
 pub struct Verifier {
@@ -180,6 +183,8 @@ pub struct Verifier {
     pub time_hir: Duration,
     /// execution times for each module run in parallel
     pub module_times: HashMap<vir::ast::Path, ModuleStats>,
+    /// smt runtimes for each function per module
+    pub func_times: HashMap<vir::ast::Path, HashMap<Fun, Duration>>,
 
     // If we've already created the log directory, this is the path to it:
     created_log_dir: Option<String>,
@@ -231,6 +236,7 @@ impl Verifier {
             time_vir_rust_to_vir: Duration::new(0, 0),
 
             module_times: HashMap::new(),
+            func_times: HashMap::new(),
 
             created_log_dir: None,
             vir_crate: None,
@@ -260,6 +266,7 @@ impl Verifier {
             time_vir: Duration::new(0, 0),
             time_vir_rust_to_vir: Duration::new(0, 0),
             module_times: HashMap::new(),
+            func_times: HashMap::new(),
             created_log_dir: self.created_log_dir.clone(),
             vir_crate: self.vir_crate.clone(),
             crate_names: self.crate_names.clone(),
@@ -279,6 +286,7 @@ impl Verifier {
         self.time_vir += other.time_vir;
         self.time_vir_rust_to_vir += other.time_vir_rust_to_vir;
         self.module_times.extend(other.module_times);
+        self.func_times.extend(other.func_times);
     }
 
     fn create_log_file(
@@ -827,7 +835,7 @@ impl Verifier {
         source_map: Option<&SourceMap>,
         module: &vir::ast::Path,
         ctx: &mut vir::context::Ctx,
-    ) -> Result<(Duration, Duration), VirErr> {
+    ) -> Result<(Duration, Duration, Duration), VirErr> {
         let mut air_context = self.new_air_context_with_prelude(
             reporter,
             module,
@@ -1166,6 +1174,7 @@ impl Verifier {
         let no_auto_recommends_check = self.args.no_auto_recommends_check;
         let expand_errors_check = self.args.expand_errors;
         self.expand_targets = vec![];
+        let unaccounted_smt_run_time = air_context.get_time().1;
         for function in &krate.functions {
             if Some(module.clone()) != function.x.owning_module {
                 continue;
@@ -1173,7 +1182,7 @@ impl Verifier {
             let check_validity = &mut |recommends_rerun: bool,
                                        expands_rerun: bool,
                                        mut fun_ssts: SstMap|
-             -> Result<(bool, SstMap), VirErr> {
+             -> Result<(bool, SstMap, Duration), VirErr> {
                 let mut spinoff_context_counter = 1;
                 ctx.fun = mk_fun_ctx(&function, recommends_rerun);
                 ctx.expand_flag = expands_rerun;
@@ -1199,6 +1208,7 @@ impl Verifier {
                     if recommends_rerun { "Function-Check-Recommends " } else { "Function-Def " };
 
                 let mut function_invalidity = false;
+                let mut curr_smt_time = Duration::ZERO;
                 for command in commands.iter().map(|x| &*x) {
                     let CommandsWithContextX {
                         span,
@@ -1255,6 +1265,7 @@ impl Verifier {
                         &mut air_context
                     };
                     let desc_prefix = recommends_rerun.then(|| "recommends check: ");
+                    let iter_curr_smt_time = query_air_context.get_time().1;
                     let command_invalidity = self.run_commands_queries(
                         reporter,
                         source_map,
@@ -1277,10 +1288,12 @@ impl Verifier {
                     }
 
                     function_invalidity = function_invalidity || command_invalidity;
+                    
+                    curr_smt_time = query_air_context.get_time().1 - iter_curr_smt_time;
                 }
-                Ok((function_invalidity, fun_ssts))
+                Ok((function_invalidity, fun_ssts, curr_smt_time))
             };
-            let (function_invalidity, new_fun_ssts) = check_validity(false, false, fun_ssts)?;
+            let (function_invalidity, new_fun_ssts, func_smt_time) = check_validity(false, false, fun_ssts)?;
             fun_ssts = new_fun_ssts;
             if function_invalidity && expand_errors_check {
                 fun_ssts = check_validity(false, true, fun_ssts)?.1;
@@ -1288,12 +1301,16 @@ impl Verifier {
             if function_invalidity && !no_auto_recommends_check {
                 fun_ssts = check_validity(true, false, fun_ssts)?.1;
             }
+
+            let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
+            func_time_for_mod
+                .insert(function.x.name.clone(), func_smt_time);
         }
         ctx.fun = None;
 
         let (time_smt_init, time_smt_run) = air_context.get_time();
 
-        Ok((time_smt_init + spunoff_time_smt_init, time_smt_run + spunoff_time_smt_run))
+        Ok((time_smt_init + spunoff_time_smt_init, time_smt_run + spunoff_time_smt_run, unaccounted_smt_run_time))
     }
 
     fn verify_module_outer(
@@ -1307,6 +1324,7 @@ impl Verifier {
         let time_verify_start = Instant::now();
 
         self.module_times.insert(module.clone(), Default::default());
+        self.func_times.insert(module.clone(), HashMap::new());
 
         let module_name = module_name(module);
         if self.args.trace || (self.args.verify_module.len() > 0 || self.args.verify_root) {
@@ -1338,7 +1356,7 @@ impl Verifier {
             vir::printer::write_krate(&mut file, &poly_krate, &self.args.vir_log_option);
         }
 
-        let (time_smt_init, time_smt_run) =
+        let (time_smt_init, time_smt_run, unaccounted_smt_run_time) =
             self.verify_module(reporter, &poly_krate, source_map, module, &mut ctx)?;
 
         global_ctx = ctx.free();
@@ -1348,6 +1366,7 @@ impl Verifier {
         let mut time_module = self.module_times.get_mut(module).expect("module should exist");
         time_module.time_smt_init = time_smt_init;
         time_module.time_smt_run = time_smt_run;
+        time_module.unaccounted_smt_run_time = unaccounted_smt_run_time;
         time_module.time_verify = time_verify_end - time_verify_start;
 
         if self.args.trace {
