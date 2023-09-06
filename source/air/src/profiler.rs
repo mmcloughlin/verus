@@ -80,3 +80,237 @@ impl Profiler {
         self.quantifier_stats.iter()
     }
 }
+
+pub struct LocationAwareProfiler {
+    ff_line_count : usize,
+}
+
+impl LocationAwareProfiler {
+    pub fn new() -> LocationAwareProfiler {
+        LocationAwareProfiler { ff_line_count : 0 }
+    }
+
+    // get a new starting point (end of file)
+    pub fn update(&mut self) {
+        let file = std::io::BufReader::new(
+            std::fs::File::open(PROVER_LOG_FILE).expect("Failed to open prover trace log"),
+        );
+        self.ff_line_count = file.lines().count();
+    }
+
+    // profile from ff_line_count -> eof
+    // assumption: file end is end of function's new content
+    pub fn profile(&self, diagnostics : &impl Diagnostics) -> Profiler
+    {
+        let path = PROVER_LOG_FILE;
+
+        // Count the number of lines
+        let file = std::io::BufReader::new(
+            std::fs::File::open(path).expect("Failed to open prover trace log"),
+        );
+        let line_count = file.lines().count();
+        assert!(line_count > self.ff_line_count);
+
+        // Reset to actually parse the file
+        let mut file = std::io::BufReader::new(
+            std::fs::File::open(path).expect("Failed to open prover trace log"),
+        );
+        // fast_forward to new content
+        for _i in 0..self.ff_line_count {
+            let _ = file.read_line(&mut String::new());
+        }
+        let mut model_config = ModelConfig::default();
+        model_config.parser_config.skip_z3_version_check = true;
+        model_config.parser_config.ignore_invalid_lines = true;
+        model_config.skip_log_consistency_checks = true;
+        let mut model = Model::new(model_config);
+        diagnostics.report(&note_bare("Analyzing prover log..."));
+        let _ = model
+            .process(Some(path.to_string()), file, line_count)
+            .expect("Error processing prover trace");
+        diagnostics.report(&note_bare("... analysis complete\n"));
+
+        // Analyze the quantifer costs
+        let quant_costs = model.quant_costs();
+        let mut user_quant_costs = quant_costs
+            .into_iter()
+            .filter(|cost| cost.quant.starts_with(USER_QUANT_PREFIX))
+            .collect::<Vec<_>>();
+        user_quant_costs.sort_by_key(|v| v.instantiations * v.cost);
+        user_quant_costs.reverse();
+
+        Profiler { quantifier_stats: user_quant_costs }
+    } 
+    
+}
+
+pub mod simple {
+    use std::collections::HashMap;
+    use std::io::BufRead;
+    use z3tracer::error::RawResult;
+    use z3tracer::syntax::*;
+    use crate::messages::{note_bare, Diagnostics};
+
+    struct SimpleProfiler {
+        terms: std::collections::BTreeMap<Ident, Term>,
+        instantiations: HashMap<Ident, u64>,
+    }
+
+    impl z3tracer::parser::LogVisitor for &mut SimpleProfiler {
+        fn add_term(&mut self, ident: Ident, term: Term) -> RawResult<()> {
+            self.terms.insert(ident, term);
+            Ok(())
+        }
+
+        fn add_instantiation(
+            &mut self,
+            _key: QiKey,
+            frame: QiFrame,
+        ) -> z3tracer::error::RawResult<()> {
+            if let z3tracer::syntax::QiFrame::NewMatch { ref quantifier, .. } = frame {
+                *self.instantiations.entry(quantifier.to_owned()).or_insert(0) += 1;
+            }
+            Ok(())
+        }
+
+        fn start_instance(&mut self, _key: QiKey, _instance: QiInstance) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn end_instance(&mut self) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn add_equality(&mut self, _id: Ident, _eq: Equality) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn attach_meaning(&mut self, _id: Ident, _m: Meaning) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn attach_var_names(&mut self, _id: Ident, _names: Vec<VarName>) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn attach_enode(&mut self, _id: Ident, _generation: u64) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn tool_version(&mut self, _s1: String, _s2: String) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn begin_check(&mut self, _i: u64) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn assign(&mut self, _lit: Literal, _s: String) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn conflict(&mut self, _lits: Vec<Literal>, _s: String) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn push(&mut self, _level: u64) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn pop(&mut self, _num: u64, _current_level: u64) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn resolve_lit(&mut self, _i: u64, _lit: Literal) -> RawResult<()> {
+            Ok(())
+        }
+
+        fn resolve_process(&mut self, _lit: Literal) -> RawResult<()> {
+            Ok(())
+        }
+    }
+
+    const PARSER_CONFIG: z3tracer::parser::ParserConfig =
+        z3tracer::parser::ParserConfig { skip_z3_version_check: true, ignore_invalid_lines: true };
+
+    impl SimpleProfiler {
+        fn new() -> Self {
+            SimpleProfiler {
+                instantiations: HashMap::new(),
+                terms: std::collections::BTreeMap::new(),
+            }
+        }
+
+        /// Process some input.
+        fn process<R>(
+            &mut self,
+            path_name: Option<String>,
+            input: R,
+            line_count: usize,
+        ) -> Result<(), ()>
+        where
+            R: std::io::BufRead,
+        {
+            let lexer = z3tracer::lexer::Lexer::new(path_name, input, line_count);
+            z3tracer::parser::Parser::new(PARSER_CONFIG, lexer, self).parse().map_err(|_| ())
+        }
+
+        fn instantiations(&self) -> Vec<(String, u64, Vec<(String, u64)>)> {
+            let mut quantifier_counts = HashMap::new();
+            for (ident, count) in self.instantiations.iter() {
+                let quant_name = match &self.terms[&ident] {
+                    Term::Quant { name, .. } => name,
+                    _ => panic!("Term for quantifier isn't a Quant"),
+                };
+                let (ref mut curr_count, ref mut ident_counts) =
+                    quantifier_counts.entry(quant_name.clone()).or_insert((0, HashMap::new()));
+                *curr_count += count;
+                *ident_counts.entry(ident).or_insert(0) += count;
+            }
+            let mut quantifier_counts: Vec<_> = quantifier_counts
+                .into_iter()
+                .map(|(qid, (count, icounts))| {
+                    (qid, count, {
+                        let mut icounts: Vec<(String, u64)> = icounts
+                            .into_iter()
+                            .map(|(id, icount)| (format!("{:?}", id), icount))
+                            .collect();
+                        icounts.sort_by_key(|(_, c)| u64::MAX - *c);
+                        icounts
+                    })
+                })
+                .collect();
+            quantifier_counts.sort_by_key(|(_, c, _)| u64::MAX - *c);
+            quantifier_counts
+        }
+    }
+
+    pub fn profile(diagnostics : &impl Diagnostics) -> Vec<(String, u64, Vec<(String, u64)>)> {
+        let path = super::PROVER_LOG_FILE;
+
+        // Count the number of lines
+        let file = std::io::BufReader::new(
+            std::fs::File::open(path).expect("Failed to open prover trace log"),
+        );
+        let line_count = file.lines().count();
+
+        // Reset to actually parse the file
+        let file = std::io::BufReader::new(
+            std::fs::File::open(path).expect("Failed to open prover trace log"),
+        );
+
+        let mut profile = SimpleProfiler::new();
+        diagnostics.report(&note_bare("Analyzing prover log..."));
+        let _ = profile
+            .process(Some(path.to_string()), file, line_count)
+            .expect("Error processing prover trace");
+        diagnostics.report(&note_bare("... analysis complete\n"));
+
+        profile.instantiations()
+    }
+}
+
+
+pub mod simple2 {
+
+}

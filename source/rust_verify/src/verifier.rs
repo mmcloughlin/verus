@@ -7,7 +7,8 @@ use crate::verus_items::VerusItems;
 use air::ast::{Command, CommandX, Commands};
 use air::context::{QueryContext, ValidityResult};
 use air::messages::{message, note, note_bare, Diagnostics, Message, MessageLabel, MessageLevel};
-use air::profiler::Profiler;
+use air::profiler::{Profiler, LocationAwareProfiler};
+// use air::profiler::simple;
 use rustc_errors::{DiagnosticBuilder, EmissionGuarantee};
 use rustc_hir::OwnerNode;
 use verus_rustc_interface::interface::Compiler;
@@ -185,6 +186,7 @@ pub struct Verifier {
     pub module_times: HashMap<vir::ast::Path, ModuleStats>,
     /// smt runtimes for each function per module
     pub func_times: HashMap<vir::ast::Path, HashMap<Fun, Duration>>,
+    pub profiler: LocationAwareProfiler,
 
     // If we've already created the log directory, this is the path to it:
     created_log_dir: Option<String>,
@@ -237,6 +239,7 @@ impl Verifier {
 
             module_times: HashMap::new(),
             func_times: HashMap::new(),
+            profiler: LocationAwareProfiler::new(),
 
             created_log_dir: None,
             vir_crate: None,
@@ -267,6 +270,7 @@ impl Verifier {
             time_vir_rust_to_vir: Duration::new(0, 0),
             module_times: HashMap::new(),
             func_times: HashMap::new(),
+            profiler: LocationAwareProfiler::new(),
             created_log_dir: self.created_log_dir.clone(),
             vir_crate: self.vir_crate.clone(),
             crate_names: self.crate_names.clone(),
@@ -345,6 +349,45 @@ impl Verifier {
         }
     }
 
+fn print_simple_profile_stats(
+        &self,
+        diagnostics: &impl Diagnostics,
+        profile: Vec<(String, u64, Vec<(String, u64)>)>,
+        qid_map: &HashMap<String, vir::sst::BndInfo>,
+    ) {
+        let max = 50;
+        for (index, (name, count, identcounts)) in profile.iter().take(max).enumerate() {
+            let index = index + 1;
+            // Report the quantifier
+            if let Some(bnd_info) = qid_map.get(name) {
+                let span = &bnd_info.span;
+                let mut msg =
+                    format!("{:2}. Quantifier {}, instantiations: {}\n", index, name, count);
+                for (ident, count) in identcounts {
+                    msg += format!("    at: {}, instantiations: {}\n", ident, count).as_str();
+                }
+                let mut msg = note_bare(&msg);
+                msg = msg.primary_label(&span, "Triggers selected for this quantifier".to_string());
+                // Summarize the triggers it used
+                let triggers = &bnd_info.trigs;
+                for trigger in triggers.iter() {
+                    for exp in trigger.iter() {
+                        msg = msg.secondary_span(&exp.span);
+                    }
+                }
+                diagnostics.report(&msg);
+            } else {
+                let mut msg =
+                    format!("{:2}. Quantifier {}, instantiations: {}\n", index, name, count);
+                for (ident, count) in identcounts {
+                    msg += format!("    at: {}, instantiations: {}\n", ident, count).as_str();
+                }
+
+                diagnostics.report(&note_bare(&msg));
+            }
+        }
+    }
+    
     fn print_profile_stats(
         &self,
         diagnostics: &impl Diagnostics,
@@ -476,8 +519,11 @@ impl Verifier {
                     }
                     reporter.report(&message(level, msg, &context.0));
                     if self.args.profile {
-                        let profiler = Profiler::new(reporter);
+                        let profiler = self.profiler.profile(reporter);
+                        // let profiler = Profiler::new(reporter);
                         self.print_profile_stats(reporter, profiler, qid_map);
+                        // let profile = simple::profile(reporter);
+                        // self.print_simple_profile_stats(reporter, profile, qid_map);
                     }
                     break;
                 }
@@ -1305,6 +1351,10 @@ impl Verifier {
             let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
             func_time_for_mod
                 .insert(function.x.name.clone(), func_smt_time);
+            // fails here -- messes up process
+            if self.args.profile {
+                self.profiler.update();
+            }
         }
         ctx.fun = None;
 
