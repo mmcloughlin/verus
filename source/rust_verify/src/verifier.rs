@@ -7,8 +7,7 @@ use crate::verus_items::VerusItems;
 use air::ast::{Command, CommandX, Commands};
 use air::context::{QueryContext, ValidityResult};
 use air::messages::{message, note, note_bare, Diagnostics, Message, MessageLabel, MessageLevel};
-use air::profiler::{Profiler, LocationAwareProfiler};
-// use air::profiler::simple;
+use air::profiler::{Profiler, LocationAwareProfiler, simple};
 use rustc_errors::{DiagnosticBuilder, EmissionGuarantee};
 use rustc_hir::OwnerNode;
 use verus_rustc_interface::interface::Compiler;
@@ -161,6 +160,14 @@ pub struct ModuleStats {
     pub unaccounted_smt_run_time : Duration,
 }
 
+pub struct FuncStats {
+    // time spent on SMT for this function
+    pub time_smt_run : Duration,
+    // number of quantifiers instantiatied
+    // TODO: change this to vector by depth
+    pub quant_instantiations : Option<u64>,
+}
+
 pub struct Verifier {
     /// this is the actual number of threads used for verification. This will be set to the
     /// minimum of the requested threads and the number of modules to verify
@@ -185,7 +192,7 @@ pub struct Verifier {
     /// execution times for each module run in parallel
     pub module_times: HashMap<vir::ast::Path, ModuleStats>,
     /// smt runtimes for each function per module
-    pub func_times: HashMap<vir::ast::Path, HashMap<Fun, Duration>>,
+    pub func_times: HashMap<vir::ast::Path, HashMap<Fun, FuncStats>>,
     pub profiler: LocationAwareProfiler,
 
     // If we've already created the log directory, this is the path to it:
@@ -1229,6 +1236,7 @@ fn print_simple_profile_stats(
         self.expand_targets = vec![];
         let unaccounted_smt_run_time = air_context.get_time().1;
         for function in &krate.functions {
+            let mut has_queries = false;
             if Some(module.clone()) != function.x.owning_module {
                 continue;
             }
@@ -1263,6 +1271,7 @@ fn print_simple_profile_stats(
                 let mut function_invalidity = false;
                 let mut curr_smt_time = Duration::ZERO;
                 for command in commands.iter().map(|x| &*x) {
+                    has_queries = true;
                     let CommandsWithContextX {
                         span,
                         desc: _,
@@ -1305,7 +1314,7 @@ fn print_simple_profile_stats(
                             function_decl_commands.clone(),
                             function_spec_commands.clone(),
                             function_axiom_commands.clone(),
-                            Some(fun_as_friendly_rust_name(&function.x.name)),
+                            Some(friendly_fun_name_crate_relative(module, &function.x.name)),
                             recommends_rerun,
                             spinoff_context_counter,
                             &span,
@@ -1359,9 +1368,19 @@ fn print_simple_profile_stats(
 
             let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
             func_time_for_mod
-                .insert(function.x.name.clone(), func_smt_time);
-            // fails here -- messes up process
-            if self.args.profile {
+                .insert(function.x.name.clone(),
+                    FuncStats { time_smt_run : func_smt_time, quant_instantiations : None});
+            if self.args.profile && has_queries {
+                let profile = 
+                    simple::profile(
+                        &format!(".profile/{}.log", friendly_fun_name_crate_relative(module, &function.x.name).replace("::", "_")),
+                        reporter);
+                let total_quant = profile.iter().map(|(_, n, _)| n).sum::<u64>();
+                let stats = func_time_for_mod.get_mut(&function.x.name).expect("just inserted");
+                stats.quant_instantiations = Some(total_quant);
+                // self.print_simple_profile_stats(reporter, profile, &ctx.global.qid_map.borrow());
+
+                // locationaware fails here -- messes up process by cutting prelude
                 // self.profiler.update();
             }
         }

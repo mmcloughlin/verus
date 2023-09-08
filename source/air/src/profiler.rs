@@ -285,8 +285,8 @@ pub mod simple {
         }
     }
 
-    pub fn profile(diagnostics : &impl Diagnostics) -> Vec<(String, u64, Vec<(String, u64)>)> {
-        let path = super::PROVER_LOG_FILE;
+    pub fn profile(filename : &str, diagnostics : &impl Diagnostics) -> Vec<(String, u64, Vec<(String, u64)>)> {
+        let path = filename;
 
         // Count the number of lines
         let file = std::io::BufReader::new(

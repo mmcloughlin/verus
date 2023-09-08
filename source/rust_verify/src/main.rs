@@ -186,7 +186,7 @@ pub fn main() {
         let mut smt_function_breakdown = verifier
             .func_times
             .iter()
-            .map(|(k, v)| (k, v.iter().map(|(f, t)| (f, t.as_millis())).collect::<Vec<_>>()))
+            .map(|(k, v)| (k, v.iter().map(|(f, t)| (f, t.time_smt_run.as_millis(), t.quant_instantiations)).collect::<Vec<_>>()))
             .collect::<HashMap<_, _>>();
 
         let mut air_times = verifier
@@ -291,10 +291,11 @@ pub fn main() {
                                 "module" : rust_verify::verifier::module_name(m),
                                 "time" : t.0,
                                 "unaccounted-time" : t.1,
-                                "function-breakdown" : smt_function_breakdown.get_mut(m).expect("Module should exist").iter().map(|(f, t)| {
+                                "function-breakdown" : smt_function_breakdown.get_mut(m).expect("Module should exist").iter().map(|(f, t, q)| {
                                     serde_json::json!({
                                         "function" : friendly_fun_name_crate_relative(m, f),
-                                        "time" : t
+                                        "time" : t,
+                                        "quantifier-instantiations" : match q { Some(x) => x, None => &0 }
                                     })
                                 }).collect::<Vec<serde_json::Value>>()
                             })

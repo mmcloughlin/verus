@@ -317,7 +317,7 @@ impl Context {
                     let file_name = match &self.query_function_name {
                         Some(name) => format!(".profile/{}.log", name.replace("::", "_")),
                         None => profiler::PROVER_LOG_FILE.to_string()
-                    }; 
+                    };
                     self.log_set_z3_param("trace_file_name", &file_name);
                 }
                 self.blank_line();
