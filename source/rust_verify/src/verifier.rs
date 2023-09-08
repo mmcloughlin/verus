@@ -519,9 +519,9 @@ fn print_simple_profile_stats(
                     }
                     reporter.report(&message(level, msg, &context.0));
                     if self.args.profile {
-                        let profiler = self.profiler.profile(reporter);
+                        // let profiler = self.profiler.profile(reporter);
                         // let profiler = Profiler::new(reporter);
-                        self.print_profile_stats(reporter, profiler, qid_map);
+                        // self.print_profile_stats(reporter, profiler, qid_map);
                         // let profile = simple::profile(reporter);
                         // self.print_simple_profile_stats(reporter, profile, qid_map);
                     }
@@ -716,6 +716,7 @@ fn print_simple_profile_stats(
         diagnostics: &impl Diagnostics,
         module_path: &vir::ast::Path,
         query_function_path_counter: Option<(&vir::ast::Path, usize)>,
+        function_name: Option<String>,
         is_rerun: bool,
         prelude_config: vir::prelude::PreludeConfig,
     ) -> Result<air::context::Context, VirErr> {
@@ -724,6 +725,9 @@ fn print_simple_profile_stats(
         air_context.set_debug(self.args.debug);
         air_context.set_profile(self.args.profile);
         air_context.set_profile_all(self.args.profile_all);
+        if function_name.is_some() {
+            air_context.set_query_function_name(function_name.unwrap());
+        }
 
         let rerun_msg = if is_rerun { "_rerun" } else { "" };
         let count_msg = query_function_path_counter
@@ -815,6 +819,7 @@ fn print_simple_profile_stats(
         function_decl_commands: Arc<Vec<(Commands, String)>>,
         function_spec_commands: Arc<Vec<(Commands, String)>>,
         function_axiom_commands: Arc<Vec<(Commands, String)>>,
+        function_name: Option<String>,
         is_rerun: bool,
         context_counter: usize,
         span: &air::ast::Span,
@@ -823,6 +828,7 @@ fn print_simple_profile_stats(
             diagnostics,
             module_path,
             Some((function_path, context_counter)),
+            function_name,
             is_rerun,
             PreludeConfig { arch_word_bits: self.args.arch_word_bits },
         )?;
@@ -885,6 +891,7 @@ fn print_simple_profile_stats(
         let mut air_context = self.new_air_context_with_prelude(
             reporter,
             module,
+            None,
             None,
             false,
             PreludeConfig { arch_word_bits: self.args.arch_word_bits },
@@ -1284,7 +1291,8 @@ fn print_simple_profile_stats(
                     }
                     let mut spinoff_z3_context;
                     let do_spinoff = (*prover_choice == vir::def::ProverChoice::Spinoff)
-                        || (*prover_choice == vir::def::ProverChoice::BitVector);
+                        || (*prover_choice == vir::def::ProverChoice::BitVector)
+                        || self.args.profile;
                     let query_air_context = if do_spinoff {
                         spinoff_z3_context = self.new_air_context_with_module_context(
                             ctx,
@@ -1297,6 +1305,7 @@ fn print_simple_profile_stats(
                             function_decl_commands.clone(),
                             function_spec_commands.clone(),
                             function_axiom_commands.clone(),
+                            Some(fun_as_friendly_rust_name(&function.x.name)),
                             recommends_rerun,
                             spinoff_context_counter,
                             &span,
@@ -1353,7 +1362,7 @@ fn print_simple_profile_stats(
                 .insert(function.x.name.clone(), func_smt_time);
             // fails here -- messes up process
             if self.args.profile {
-                self.profiler.update();
+                // self.profiler.update();
             }
         }
         ctx.fun = None;
