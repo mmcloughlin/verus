@@ -1528,13 +1528,26 @@ fn print_simple_profile_stats(
             module_graph
         };
         if self.args.log_all {
-            let mut file = self.create_log_file(None, None, "-module-call-graph.txt")?;
-            for (src, tgts) in module_graph.iter() {
-                write!(&mut file, "{} -> ", vir::def::path_to_string(src)).expect("failed to write call graph");
-                for tgt in tgts {
-                    write!(&mut file, "{}, ", vir::def::path_to_string(tgt)).expect("failed to write call graph");
+            {
+                let mut file = self.create_log_file(None, None, "-module-call-graph.txt")?;
+                for (src, tgts) in module_graph.iter() {
+                    write!(&mut file, "{} -> ", vir::def::path_to_string(src)).expect("failed to write call graph");
+                    for tgt in tgts {
+                        write!(&mut file, "{}, ", vir::def::path_to_string(tgt)).expect("failed to write call graph");
+                    }
+                    writeln!(&mut file, "").expect("failed to write call graph");
                 }
-                writeln!(&mut file, "").expect("failed to write call graph");
+            }
+            {
+                let mut file = self.create_log_file(None, None, "-module-call-graph.dot")?;
+                writeln!(&mut file, "digraph M {{").expect("failed to write call graph");
+                writeln!(&mut file, "  rankdir=LR;").expect("failed to write call graph");
+                for (src, tgts) in module_graph.iter() {
+                    for tgt in tgts {
+                        writeln!(&mut file, "  \"{}\" -> \"{}\";", vir::def::path_to_string(src), vir::def::path_to_string(tgt)).expect("failed to write call graph");
+                    }
+                }
+                writeln!(&mut file, "}}").expect("failed to write call graph");
             }
         }
 
