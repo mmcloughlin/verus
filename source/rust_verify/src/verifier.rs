@@ -1492,11 +1492,16 @@ fn print_simple_profile_stats(
         )?;
         vir::recursive_types::check_traits(&krate, &global_ctx)?;
         let krate = vir::ast_simplify::simplify_krate(&mut global_ctx, &krate)?;
-
+        
         if self.args.log_all || self.args.log_vir_simple {
             let mut file =
                 self.create_log_file(None, None, crate::config::VIR_SIMPLE_FILE_SUFFIX)?;
             vir::printer::write_krate(&mut file, &krate, &self.args.vir_log_option);
+        }
+        
+        if self.args.log_all {
+            let mut file = self.create_log_file(None, None, "-func-call-graph.txt")?;
+            write!(&mut file, "{}", global_ctx.func_call_graph.graph_to_string().expect("failed to format call graph")).expect("failed to write call graph");
         }
 
         #[cfg(debug_assertions)]

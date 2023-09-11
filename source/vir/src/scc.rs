@@ -279,3 +279,28 @@ impl<T: std::cmp::Eq + std::hash::Hash + Clone + std::fmt::Debug> std::fmt::Debu
         Ok(())
     }
 }
+
+impl Graph<crate::recursion::Node> {
+    pub fn graph_to_string(&self) -> Result<String, std::fmt::Error> {
+        let mut s = String::new();
+        use std::fmt::Write;
+        writeln!(s, "Graph {{")?;
+        for node in self.nodes.iter() {
+            use crate::recursion::Node::*;
+            let name = |t: &crate::recursion::Node| match t {
+                Fun(fun) => crate::def::path_to_string(&fun.path),
+                Trait(path) => crate::def::path_to_string(path),
+                TraitImpl(path) => crate::def::path_to_string(path),
+                Datatype(path) => crate::def::path_to_string(path),
+            };
+            write!(s, "- {} -> {{", name(&node.t))?;
+            for idx in node.edges.iter() {
+                let succ_t = &self.nodes[*idx].t;
+                write!(s, " {},", name(succ_t))?;
+            }
+            writeln!(s, " }}")?;
+        }
+        writeln!(s, "}}")?;
+        Ok(s)
+    }
+}
