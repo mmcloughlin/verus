@@ -17,7 +17,7 @@ use rustc_error_messages::MultiSpan;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::source_map::SourceMap;
 use rustc_span::Span;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque, BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
@@ -163,9 +163,8 @@ pub struct ModuleStats {
 pub struct FuncStats {
     // time spent on SMT for this function
     pub time_smt_run : Duration,
-    // number of quantifiers instantiatied
-    // TODO: change this to vector by depth
-    pub quant_instantiations : Option<u64>,
+    // number of quantifiers instantiatied, indexed by depth
+    pub quant_instantiations : Option<Vec<u64>>,
 }
 
 pub struct Verifier {
@@ -193,6 +192,8 @@ pub struct Verifier {
     pub module_times: HashMap<vir::ast::Path, ModuleStats>,
     /// smt runtimes for each function per module
     pub func_times: HashMap<vir::ast::Path, HashMap<Fun, FuncStats>>,
+    /// Graph representing the module structure of the project module -> {consumers}
+    pub module_graph : BTreeMap<vir::ast::Path, BTreeSet<vir::ast::Path>>,
     pub profiler: LocationAwareProfiler,
 
     // If we've already created the log directory, this is the path to it:
@@ -246,6 +247,7 @@ impl Verifier {
 
             module_times: HashMap::new(),
             func_times: HashMap::new(),
+            module_graph : BTreeMap::new(),
             profiler: LocationAwareProfiler::new(),
 
             created_log_dir: None,
@@ -277,6 +279,7 @@ impl Verifier {
             time_vir_rust_to_vir: Duration::new(0, 0),
             module_times: HashMap::new(),
             func_times: HashMap::new(),
+            module_graph : BTreeMap::new(),
             profiler: LocationAwareProfiler::new(),
             created_log_dir: self.created_log_dir.clone(),
             vir_crate: self.vir_crate.clone(),
@@ -441,6 +444,31 @@ fn print_simple_profile_stats(
         }
     }
 
+    fn compute_module_distance(
+        &self,
+        source : &vir::ast::Path,
+        dest : &vir::ast::Path
+    ) -> Option<usize> {
+        let mut search_queue = VecDeque::from([(source,0)]);
+        let mut visited = HashSet::<&vir::ast::Path>::new();
+        while !search_queue.is_empty() {
+            let (head, curr_depth) = search_queue.pop_front().unwrap();
+            assert!(!visited.contains(head));
+            visited.insert(head);
+            if head == dest {
+                return Some(curr_depth)
+            }
+            if let Some(children) = self.module_graph.get(head) {
+                for child in children.iter() {
+                    if !visited.contains(child) {
+                        search_queue.push_back((child, curr_depth + 1));
+                    }
+                }
+            }
+        }
+        None
+    }
+    
     /// Check the result of a query that was based on user input.
     /// Success/failure will (eventually) be communicated back to the user.
     /// Returns true if there was at least one Invalid resulting in an error.
@@ -1365,24 +1393,42 @@ fn print_simple_profile_stats(
             if function_invalidity && !no_auto_recommends_check {
                 fun_ssts = check_validity(true, false, fun_ssts)?.1;
             }
-
-            let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
-            func_time_for_mod
-                .insert(function.x.name.clone(),
-                    FuncStats { time_smt_run : func_smt_time, quant_instantiations : None});
+            let mut quant_depth_vec = None;
             if self.args.profile && has_queries {
                 let profile = 
                     simple::profile(
                         &format!(".profile/{}.log", friendly_fun_name_crate_relative(module, &function.x.name).replace("::", "_")),
                         reporter);
-                let total_quant = profile.iter().map(|(_, n, _)| n).sum::<u64>();
-                let stats = func_time_for_mod.get_mut(&function.x.name).expect("just inserted");
-                stats.quant_instantiations = Some(total_quant);
+                let mut max_depth = 0;
+                // depth -> #instantiations
+                let mut quant_depth_map = HashMap::new();
+                let qid_map = &ctx.global.qid_map.borrow();
+                dbg!(qid_map.len());
+                for (p , n, _) in profile.iter() {
+                    let quant_mod = &qid_map.get(p).expect("Quantifier span not found").module;
+                    let access_depth = self.compute_module_distance(&module.clone(), quant_mod).expect("quantifer not connected through module graph");
+                    if access_depth > max_depth {
+                        max_depth = access_depth;
+                    }
+                    let count = quant_depth_map.entry(access_depth).or_insert(0u64);
+                    // add quant total to access depth key
+                    *count += n
+                }
+                let mut depth_vec = vec![0u64; max_depth];
+                for (d, c) in quant_depth_map.iter() {
+                    depth_vec[*d] = *c;
+                }
+                quant_depth_vec = Some(depth_vec);
+                // let total_quant = profile.iter().map(|(_, n, _)| n).sum::<u64>();
                 // self.print_simple_profile_stats(reporter, profile, &ctx.global.qid_map.borrow());
 
                 // locationaware fails here -- messes up process by cutting prelude
                 // self.profiler.update();
             }
+            let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
+            func_time_for_mod
+            .insert(function.x.name.clone(),
+                FuncStats { time_smt_run : func_smt_time, quant_instantiations : quant_depth_vec});
         }
         ctx.fun = None;
 
@@ -1504,7 +1550,7 @@ fn print_simple_profile_stats(
             write!(&mut file, "{}", global_ctx.func_call_graph.graph_to_string().expect("failed to format call graph")).expect("failed to write call graph");
         }
         
-        let module_graph = {
+        self.module_graph = {
             use vir::ast::Path;
             fn truncate_to_module(mut path: Path, module_ids: &std::collections::BTreeSet<Path>) -> Option<Path> {
                 while !module_ids.contains(&path) {
@@ -1530,7 +1576,7 @@ fn print_simple_profile_stats(
         if self.args.log_all {
             {
                 let mut file = self.create_log_file(None, None, "-module-call-graph.txt")?;
-                for (src, tgts) in module_graph.iter() {
+                for (src, tgts) in self.module_graph.iter() {
                     write!(&mut file, "{} -> ", vir::def::path_to_string(src)).expect("failed to write call graph");
                     for tgt in tgts {
                         write!(&mut file, "{}, ", vir::def::path_to_string(tgt)).expect("failed to write call graph");
@@ -1542,7 +1588,7 @@ fn print_simple_profile_stats(
                 let mut file = self.create_log_file(None, None, "-module-call-graph.dot")?;
                 writeln!(&mut file, "digraph M {{").expect("failed to write call graph");
                 writeln!(&mut file, "  rankdir=LR;").expect("failed to write call graph");
-                for (src, tgts) in module_graph.iter() {
+                for (src, tgts) in self.module_graph.iter() {
                     for tgt in tgts {
                         writeln!(&mut file, "  \"{}\" -> \"{}\";", vir::def::path_to_string(src), vir::def::path_to_string(tgt)).expect("failed to write call graph");
                     }
