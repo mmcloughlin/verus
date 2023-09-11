@@ -303,4 +303,26 @@ impl Graph<crate::recursion::Node> {
         writeln!(s, "}}")?;
         Ok(s)
     }
+    
+    pub fn iter_nodes_edges<'a>(&'a self) -> impl Iterator<Item = (&crate::recursion::Node, Vec<&crate::recursion::Node>)> + 'a {
+        self.nodes.iter().map(move |n| {
+            (
+                &n.t,
+                n.edges.iter().map(|e| &self.nodes[*e].t).collect::<Vec<_>>(),
+            )
+        })
+    }
+
+    pub fn iter_nodes_edges_paths_only<'a>(&'a self) -> impl Iterator<Item = (crate::ast::Path, Vec<crate::ast::Path>)> + 'a {
+        self.iter_nodes_edges().map(|(src, dests)| {
+            use crate::recursion::Node::*;
+            let path = |t: &crate::recursion::Node| match t {
+                Fun(fun) => &fun.path,
+                Trait(path) => path,
+                TraitImpl(path) => path,
+                Datatype(path) => path,
+            }.clone();
+            (path(src), dests.iter().map(|d| path(d)).collect::<Vec<_>>())
+        })
+    }
 }

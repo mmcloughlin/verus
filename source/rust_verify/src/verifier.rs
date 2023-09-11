@@ -1503,6 +1503,40 @@ fn print_simple_profile_stats(
             let mut file = self.create_log_file(None, None, "-func-call-graph.txt")?;
             write!(&mut file, "{}", global_ctx.func_call_graph.graph_to_string().expect("failed to format call graph")).expect("failed to write call graph");
         }
+        
+        let module_graph = {
+            use vir::ast::Path;
+            fn truncate_to_module(mut path: Path, module_ids: &std::collections::BTreeSet<Path>) -> Option<Path> {
+                while !module_ids.contains(&path) {
+                    path = path.pop_segment();
+                    if path.segments.len() == 0 {
+                        return None;
+                    }
+                }
+                Some(path.clone())
+            }
+            let module_ids: std::collections::BTreeSet<Path> = krate.module_ids.iter().cloned().collect();
+            let mut module_graph: std::collections::BTreeMap<Path, std::collections::BTreeSet<Path>> =
+                std::collections::BTreeMap::new();
+            for (cur_mod, mut tgt_mods) in global_ctx.func_call_graph.iter_nodes_edges_paths_only().filter_map(|(cur, tgts)| {
+                truncate_to_module(cur.clone(), &module_ids).map(|cur_mod|
+                    (cur_mod, tgts.iter().filter_map(|t| truncate_to_module(t.clone(), &module_ids)).collect::<std::collections::BTreeSet<_>>()))
+            }) {
+                tgt_mods.remove(&cur_mod);
+                module_graph.entry(cur_mod).or_insert(std::collections::BTreeSet::new()).append(&mut tgt_mods);
+            }
+            module_graph
+        };
+        if self.args.log_all {
+            let mut file = self.create_log_file(None, None, "-module-call-graph.txt")?;
+            for (src, tgts) in module_graph.iter() {
+                write!(&mut file, "{} -> ", vir::def::path_to_string(src)).expect("failed to write call graph");
+                for tgt in tgts {
+                    write!(&mut file, "{}, ", vir::def::path_to_string(tgt)).expect("failed to write call graph");
+                }
+                writeln!(&mut file, "").expect("failed to write call graph");
+            }
+        }
 
         #[cfg(debug_assertions)]
         vir::check_ast_flavor::check_krate_simplified(&krate);
