@@ -1,6 +1,6 @@
 #![feature(rustc_private)]
 
-use rust_verify::util::{verus_build_info, VerusBuildProfile};
+use rust_verify::{util::{verus_build_info, VerusBuildProfile}, verifier::QuantStatsModule};
 use std::collections::HashMap;
 use vir::ast_util::friendly_fun_name_crate_relative;
 
@@ -295,11 +295,11 @@ pub fn main() {
                                     serde_json::json!({
                                         "function" : friendly_fun_name_crate_relative(m, f),
                                         "time" : t,
-                                        "quantifier-instantiations" : match q { Some(x) => x.iter().sum(), None => 0 },
-                                        "quantifier-depth-breakdown" : match q 
+                                        "quantifier-instantiations" : match q { Some(x) => x.iter().map(|i| i.instantiations).sum(), None => 0 },
+                                        "quantifier-instantiations-breakdown" : match q 
                                             {
-                                                Some(x) => x.clone(),
-                                                None => Vec::new()
+                                                Some(x) => serde_json::to_value(x).expect("failed to json-ify quantifier instantiations"),
+                                                None => serde_json::Value::Array(Vec::new()),
                                             }
                                     })
                                 }).collect::<Vec<serde_json::Value>>()
