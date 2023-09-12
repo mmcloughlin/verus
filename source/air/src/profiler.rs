@@ -260,6 +260,7 @@ pub mod simple {
             for (ident, count) in self.instantiations.iter() {
                 let quant_name = match &self.terms.get(&ident) {
                     Some(Term::Quant { name, .. }) => name,
+                    // TODO is this permissiveness desirable?
                     _ => continue,
                 };
                 let (ref mut curr_count, ref mut ident_counts) =
