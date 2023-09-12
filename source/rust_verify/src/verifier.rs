@@ -473,18 +473,15 @@ fn print_simple_profile_stats(
     ) -> Option<usize> {
         let mut search_queue = VecDeque::from([(source,0)]);
         let mut visited = HashSet::<&vir::ast::Path>::new();
-        while !search_queue.is_empty() {
-            let (head, curr_depth) = search_queue.pop_front().unwrap();
-            if !visited.contains(head) {
-                visited.insert(head);
-                if head == dest {
-                    return Some(curr_depth)
-                }
-                if let Some(children) = self.module_graph.as_ref().expect("module_graph in verifier").get(head) {
-                    for child in children.iter() {
-                        if !visited.contains(child) {
-                            search_queue.push_back((child, curr_depth + 1));
-                        }
+        visited.insert(source);
+        while let Some((head, curr_depth)) = search_queue.pop_front() {
+            if head == dest {
+                return Some(curr_depth)
+            }
+            if let Some(children) = self.module_graph.as_ref().expect("module_graph in verifier").get(head) {
+                for child in children.iter() {
+                    if visited.insert(child) {
+                        search_queue.push_back((child, curr_depth + 1));
                     }
                 }
             }
@@ -1419,56 +1416,58 @@ fn print_simple_profile_stats(
             }
             let mut quant_instantiations = None;
             if self.args.profile && has_queries {
-                let profile = 
+                if let Some(profile) = 
                     simple::profile(
                         &format!(".profile/{}.log", friendly_fun_name_crate_relative(module, &function.x.name).replace("::", "_")),
-                        reporter);
-                #[derive(Clone)]
-                struct ModuleInstData {
-                    depth: Option<usize>,
-                    count: u64,
-                }
-                // module -> #instantiations
-                let mut module_instantiations = HashMap::new();
-                let qid_map = &ctx.global.qid_map.borrow();
-                let mut skipped_quant_ids: Vec<String> = Vec::new();
-                // let module_ids: std::collections::BTreeSet<vir::ast::Path> = krate.module_ids.iter().cloned().collect();
-                let mut mods_without_distance = std::collections::HashSet::new();
-                for (p , n, _) in profile.iter() {
-                    if let Some(bnd_info) = &qid_map.get(p) {
-                        let quant_mod = ctx.func_map[&bnd_info.fun].x.owning_module.clone(); // truncate_to_module(bnd_info.fun.path.clone(), &module_ids);
-                        let depth = quant_mod.as_ref().and_then(|quant_mod| {
-                            let dist = self.compute_module_distance(&module, quant_mod);
-                            if let None = dist {
-                                mods_without_distance.insert(quant_mod.clone());
-                            }
-                            dist
-                        });
-                        let mod_i = module_instantiations.entry(quant_mod).or_insert(ModuleInstData { depth, count: 0 });
-                        mod_i.count += n;
-                    } else {
-                        skipped_quant_ids.push(p.clone());
+                        reporter) {
+                    #[derive(Clone)]
+                    struct ModuleInstData {
+                        depth: Option<usize>,
+                        count: u64,
                     }
+                    // module -> #instantiations
+                    let mut module_instantiations = HashMap::new();
+                    let qid_map = &ctx.global.qid_map.borrow();
+                    let mut skipped_quant_ids: Vec<String> = Vec::new();
+                    // let module_ids: std::collections::BTreeSet<vir::ast::Path> = krate.module_ids.iter().cloned().collect();
+                    let mut mods_without_distance = std::collections::HashSet::new();
+                    for (p , n, _) in profile.iter() {
+                        if let Some(bnd_info) = &qid_map.get(p) {
+                            let quant_mod = ctx.func_map[&bnd_info.fun].x.owning_module.clone(); // truncate_to_module(bnd_info.fun.path.clone(), &module_ids);
+                            let depth = quant_mod.as_ref().and_then(|quant_mod| {
+                                let dist = self.compute_module_distance(&module, quant_mod);
+                                if let None = dist {
+                                    mods_without_distance.insert(quant_mod.clone());
+                                }
+                                dist
+                            });
+                            let mod_i = module_instantiations.entry(quant_mod).or_insert(ModuleInstData { depth, count: 0 });
+                            assert_eq!(depth, mod_i.depth);
+                            mod_i.count += n;
+                        } else {
+                            skipped_quant_ids.push(p.clone());
+                        }
+                    }
+                    // eprintln!("skipped quant ids: {}", skipped_quant_ids.join(", "));
+                    // eprintln!("depths: {:?}", quant_depth_map);
+                    // eprintln!("modules with no distance: {}", mods_without_distance.iter().map(|x| full_module_name(x)).collect::<Vec<String>>().join(", "));
+                    
+                    quant_instantiations = Some(module_instantiations.into_iter().map(|(path, ModuleInstData { depth, count })|
+                        QuantStatsModule { module_path: path.map(|path| full_module_name(&path)), module_depth: depth, instantiations: count }
+                    ).collect());
+
+                    // let total_quant = profile.iter().map(|(_, n, _)| n).sum::<u64>();
+                    // self.print_simple_profile_stats(reporter, profile, &ctx.global.qid_map.borrow());
+
+                    // locationaware fails here -- messes up process by cutting prelude
+                    // self.profiler.update();
                 }
-                // eprintln!("skipped quant ids: {}", skipped_quant_ids.join(", "));
-                // eprintln!("depths: {:?}", quant_depth_map);
-                // eprintln!("modules with no distance: {}", mods_without_distance.iter().map(|x| full_module_name(x)).collect::<Vec<String>>().join(", "));
-                
-                quant_instantiations = Some(module_instantiations.into_iter().map(|(path, ModuleInstData { depth, count })|
-                    QuantStatsModule { module_path: path.map(|path| full_module_name(&path)), module_depth: depth, instantiations: count }
-                ).collect());
-
-                // let total_quant = profile.iter().map(|(_, n, _)| n).sum::<u64>();
-                // self.print_simple_profile_stats(reporter, profile, &ctx.global.qid_map.borrow());
-
-                // locationaware fails here -- messes up process by cutting prelude
-                // self.profiler.update();
+                let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
+                func_time_for_mod
+                .insert(function.x.name.clone(),
+                    FuncStats { time_smt_run : func_smt_time, quant_instantiations });
             }
             // eprintln!("{:?} {:?} {:?}", &function.x.name, &function.x.owning_module, &module);
-            let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
-            func_time_for_mod
-            .insert(function.x.name.clone(),
-                FuncStats { time_smt_run : func_smt_time, quant_instantiations });
         }
         ctx.fun = None;
 

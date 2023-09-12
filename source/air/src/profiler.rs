@@ -258,9 +258,9 @@ pub mod simple {
         fn instantiations(&self) -> Vec<(String, u64, Vec<(String, u64)>)> {
             let mut quantifier_counts = HashMap::new();
             for (ident, count) in self.instantiations.iter() {
-                let quant_name = match &self.terms[&ident] {
-                    Term::Quant { name, .. } => name,
-                    _ => panic!("Term for quantifier isn't a Quant"),
+                let quant_name = match &self.terms.get(&ident) {
+                    Some(Term::Quant { name, .. }) => name,
+                    _ => continue,
                 };
                 let (ref mut curr_count, ref mut ident_counts) =
                     quantifier_counts.entry(quant_name.clone()).or_insert((0, HashMap::new()));
@@ -285,7 +285,7 @@ pub mod simple {
         }
     }
 
-    pub fn profile(filename : &str, diagnostics : &impl Diagnostics) -> Vec<(String, u64, Vec<(String, u64)>)> {
+    pub fn profile(filename : &str, diagnostics : &impl Diagnostics) -> Option<Vec<(String, u64, Vec<(String, u64)>)>> {
         let path = filename;
 
         // Count the number of lines
@@ -301,12 +301,11 @@ pub mod simple {
 
         let mut profile = SimpleProfiler::new();
         diagnostics.report(&note_bare("Analyzing prover log..."));
-        let _ = profile
-            .process(Some(path.to_string()), file, line_count)
-            .expect("Error processing prover trace");
+        let success: Option<()> = profile
+            .process(Some(path.to_string()), file, line_count).ok();
         diagnostics.report(&note_bare("... analysis complete\n"));
 
-        profile.instantiations()
+        success.map(|()| profile.instantiations())
     }
 }
 
