@@ -288,12 +288,13 @@ pub fn main() {
                         "smt-run": total_smt_run,
                         "smt-run-module-times" : smt_run_times.iter().map(|(m, t)| {
                             serde_json::json!({
-                                "module" : rust_verify::verifier::module_name(m),
+                                "module" : rust_verify::verifier::full_module_name(m),
                                 "time" : t.0,
                                 "unaccounted-time" : t.1,
                                 "function-breakdown" : smt_function_breakdown.get(m).expect("Module should exist").iter().map(|(f, t, q)| {
                                     serde_json::json!({
                                         "function" : friendly_fun_name_crate_relative(m, f),
+                                        "function-raw-path" : vir::def::path_to_string(&f.path),
                                         "time" : t,
                                         "quantifier-instantiations" : match q { Some(x) => x.iter().map(|i| i.instantiations).sum(), None => 0 },
                                         "quantifier-instantiations-breakdown" : match q 

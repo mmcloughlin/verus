@@ -1464,7 +1464,7 @@ fn print_simple_profile_stats(
                 // locationaware fails here -- messes up process by cutting prelude
                 // self.profiler.update();
             }
-            eprintln!("{:?} {:?} {:?}", &function.x.name, &function.x.owning_module, &module);
+            // eprintln!("{:?} {:?} {:?}", &function.x.name, &function.x.owning_module, &module);
             let func_time_for_mod = self.func_times.get_mut(module).expect("module time not found");
             func_time_for_mod
             .insert(function.x.name.clone(),
