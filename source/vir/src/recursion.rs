@@ -486,3 +486,50 @@ pub(crate) fn expand_call_graph(
 
     Ok(())
 }
+
+pub(crate) fn add_trait_bounds(krate: &Arc<crate::ast::KrateX>, func_call_graph: &mut Graph<Node>) {
+    let trait_bounds = {
+        let mut trait_bounds = HashMap::new();
+        for t in &krate.traits {
+            let mut bounds = Vec::new();
+            let typ_param_idents = Arc::new(
+                Some(crate::def::trait_self_type_param())
+                    .into_iter()
+                    .chain(t.x.typ_params.iter().map(|p| p.0.clone()))
+                    .collect::<Vec<_>>(),
+            );
+
+            for tb in &**t.x.typ_bounds {
+                if !crate::recursive_types::suppress_bound_in_trait_decl(
+                    &t.x.name,
+                    &typ_param_idents,
+                    tb,
+                ) {
+                    match &**tb {
+                        crate::ast::GenericBoundX::Trait(trait_, _) => {
+                            bounds.push(trait_.clone());
+                        }
+                    }
+                }
+            }
+            assert!(trait_bounds.insert(t.x.name.clone(), bounds).is_none())
+        }
+        trait_bounds
+    };
+    for ti in &krate.trait_impls {
+        // REVIEW: are we handling traits from other crates?
+        if let Some(bounds) = trait_bounds.get(&ti.x.trait_path) {
+            let from_node = Node::TraitImpl(ti.x.impl_path.clone());
+            for b in bounds {
+                for ti_bound in &krate.trait_impls {
+                    if &ti_bound.x.trait_path == b {
+                        func_call_graph.add_edge(
+                            from_node.clone(),
+                            Node::TraitImpl(ti_bound.x.impl_path.clone()),
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
