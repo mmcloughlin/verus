@@ -72,6 +72,7 @@ pub struct ArgsX {
     pub debugger: bool,
     pub profile: bool,
     pub profile_all: bool,
+    pub use_internal_profiler: bool,
     pub no_vstd: bool,
     pub compile: bool,
     pub solver_version_check: bool,
@@ -188,12 +189,17 @@ pub fn parse_args_with_imports(
     const EXTENDED_IGNORE_UNEXPECTED_SMT: &str = "ignore-unexpected-smt";
     const EXTENDED_DEBUG: &str = "debug";
     const EXTENDED_NO_SOLVER_VERSION_CHECK: &str = "no-solver-version-check";
+    const EXTENDED_USE_INTERNAL_PROFILER: &str = "use-internal-profiler";
     const EXTENDED_KEYS: &[(&str, &str)] = &[
         (EXTENDED_IGNORE_UNEXPECTED_SMT, "Ignore unexpected SMT output"),
         (EXTENDED_DEBUG, "Enable debugging of proof failures"),
         (
             EXTENDED_NO_SOLVER_VERSION_CHECK,
             "Skip the check that the solver has the expected version (useful to experiment with different versions of z3)",
+        ),
+        (
+            EXTENDED_USE_INTERNAL_PROFILER,
+            "Use an internal profiler that shows internal quantifier instantiations",
         ),
     ];
 
@@ -479,6 +485,7 @@ pub fn parse_args_with_imports(
             };
             matches.opt_present(OPT_PROFILE_ALL)
         },
+        use_internal_profiler: extended.get(EXTENDED_USE_INTERNAL_PROFILER).is_some(),
         compile: matches.opt_present(OPT_COMPILE),
         no_vstd,
         solver_version_check: !extended.get(EXTENDED_NO_SOLVER_VERSION_CHECK).is_some(),

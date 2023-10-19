@@ -487,6 +487,39 @@ impl Verifier {
         }
     }
 
+    fn print_internal_profile_stats(
+        &self,
+        diagnostics: &impl air::messages::Diagnostics,
+        profile: Vec<(String, u64, Vec<(String, u64)>)>,
+        qid_map: &HashMap<String, vir::sst::BndInfo>,
+    ) {
+        let max = 50;
+        for (index, (name, count, identcounts)) in profile.iter().take(max).enumerate() {
+            let index = index + 1;
+            // Report the quantifier
+            if let Some(bnd_info) = qid_map.get(name) {
+                let mut msg =
+                    format!("{:2}. Quantifier {}, instantiations: {}\n", index, name, count);
+                for (ident, count) in identcounts {
+                    msg += format!("    at: {}, instantiations: {}\n", ident, count).as_str();
+                }
+
+                let mut msg = note_bare(msg);
+                msg = msg.primary_span(&bnd_info.span);
+                diagnostics.report(&msg.to_any());
+            } else {
+                let mut msg =
+                    format!("{:2}. Quantifier {}, instantiations: {}\n", index, name, count);
+                for (ident, count) in identcounts {
+                    msg += format!("    at: {}, instantiations: {}\n", ident, count).as_str();
+                }
+
+                let msg = note_bare(msg);
+                diagnostics.report(&msg.to_any());
+            }
+        }
+    }
+
     /// Check the result of a query that was based on user input.
     /// Success/failure will (eventually) be communicated back to the user.
     /// invalidity is true if there was at least one Invalid resulting in an error.
@@ -1243,36 +1276,53 @@ impl Verifier {
                                         op.to_friendly_desc().map(|x| x + " ").unwrap_or("".into())
                                             + &fun_as_friendly_rust_name(&function.x.name);
 
-                                    match Profiler::parse(
-                                        message_interface.clone(),
-                                        &profile_file_name,
-                                        Some(&current_profile_description),
-                                        self.args.profile || self.args.profile_all,
-                                        reporter,
-                                    ) {
-                                        Ok(profiler) => {
-                                            reporter.report(
-                                                &note_bare(format!(
-                                                    "Profile statistics for {}",
-                                                    fun_as_friendly_rust_name(&function.x.name)
-                                                ))
-                                                .to_any(),
-                                            );
-                                            self.print_profile_stats(
-                                                reporter,
-                                                profiler,
-                                                &function_opgen.ctx().global.qid_map.borrow(),
-                                            );
+                                    if !self.args.use_internal_profiler {
+                                        match Profiler::parse(
+                                            message_interface.clone(),
+                                            &profile_file_name,
+                                            Some(&current_profile_description),
+                                            self.args.profile || self.args.profile_all,
+                                            reporter,
+                                        ) {
+                                            Ok(profiler) => {
+                                                reporter.report(
+                                                    &note_bare(format!(
+                                                        "Profile statistics for {}",
+                                                        fun_as_friendly_rust_name(&function.x.name)
+                                                    ))
+                                                    .to_any(),
+                                                );
+                                                self.print_profile_stats(
+                                                    reporter,
+                                                    profiler,
+                                                    &function_opgen.ctx().global.qid_map.borrow(),
+                                                );
+                                            }
+                                            Err(err) => {
+                                                reporter.report_now(
+                                                    &warning_bare(format!(
+                                                        "Failed parsing profile file for {}: {}",
+                                                        current_profile_description, err
+                                                    ))
+                                                    .to_any(),
+                                                );
+                                            }
                                         }
-                                        Err(err) => {
-                                            reporter.report_now(
-                                                &warning_bare(format!(
-                                                    "Failed parsing profile file for {}: {}",
-                                                    current_profile_description, err
-                                                ))
-                                                .to_any(),
-                                            );
-                                        }
+                                    } else {
+                                        reporter.report(
+                                            &note_bare(format!(
+                                                "Internal profile statistics for {}",
+                                                fun_as_friendly_rust_name(&function.x.name)
+                                            ))
+                                            .to_any(),
+                                        );
+                                        let profiler =
+                                            air::profiler::internal::profile(&profile_file_name);
+                                        self.print_internal_profile_stats(
+                                            reporter,
+                                            profiler,
+                                            &function_opgen.ctx().global.qid_map.borrow(),
+                                        );
                                     }
                                 }
                             } else {
@@ -1332,37 +1382,53 @@ impl Verifier {
         }
         if let Some(profile_all_file_name) = profile_all_file_name {
             if air_context.check_valid_used() {
-                match Profiler::parse(
-                    message_interface.clone(),
-                    &profile_all_file_name,
-                    Some(&bucket_id.friendly_name()),
-                    self.args.profile || self.args.profile_all,
-                    reporter,
-                ) {
-                    Ok(profiler) => {
-                        reporter.report(
-                            &note_bare(format!(
-                                "Profile statistics for {}",
-                                bucket_id.friendly_name()
-                            ))
-                            .to_any(),
-                        );
-                        self.print_profile_stats(
-                            reporter,
-                            profiler,
-                            &opgen.ctx.global.qid_map.borrow(),
-                        );
+                if !self.args.use_internal_profiler {
+                    match Profiler::parse(
+                        message_interface.clone(),
+                        &profile_all_file_name,
+                        Some(&bucket_id.friendly_name()),
+                        self.args.profile || self.args.profile_all,
+                        reporter,
+                    ) {
+                        Ok(profiler) => {
+                            reporter.report(
+                                &note_bare(format!(
+                                    "Profile statistics for {}",
+                                    bucket_id.friendly_name()
+                                ))
+                                .to_any(),
+                            );
+                            self.print_profile_stats(
+                                reporter,
+                                profiler,
+                                &opgen.ctx.global.qid_map.borrow(),
+                            );
+                        }
+                        Err(err) => {
+                            reporter.report_now(
+                                &warning_bare(format!(
+                                    "Failed parsing profile file for {}: {}",
+                                    bucket_id.friendly_name(),
+                                    err
+                                ))
+                                .to_any(),
+                            );
+                        }
                     }
-                    Err(err) => {
-                        reporter.report_now(
-                            &warning_bare(format!(
-                                "Failed parsing profile file for {}: {}",
-                                bucket_id.friendly_name(),
-                                err
-                            ))
-                            .to_any(),
-                        );
-                    }
+                } else {
+                    reporter.report(
+                        &note_bare(format!(
+                            "Internal profile statistics for {}",
+                            bucket_id.friendly_name()
+                        ))
+                        .to_any(),
+                    );
+                    let profiler = air::profiler::internal::profile(&profile_all_file_name);
+                    self.print_internal_profile_stats(
+                        reporter,
+                        profiler,
+                        &opgen.ctx.global.qid_map.borrow(),
+                    );
                 }
             }
         }
