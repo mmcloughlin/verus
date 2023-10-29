@@ -159,7 +159,8 @@ where
                 | StmX::AssertBitVector { .. }
                 | StmX::Fuel(..)
                 | StmX::RevealString(_)
-                | StmX::Return { .. } => (),
+                | StmX::Return { .. }
+                | StmX::Resolve(_) => (),
                 StmX::DeadEnd(s) => {
                     expr_visitor_control_flow!(stm_visitor_dfs(s, f));
                 }
@@ -272,6 +273,7 @@ where
             StmX::OpenInvariant(inv, _ident, _ty, _body, _atomicity) => {
                 expr_visitor_control_flow!(exp_visitor_dfs(inv, &mut ScopeMap::new(), f))
             }
+            StmX::Resolve(_) => (),
             StmX::Block(_) => (),
         }
         VisitorControlFlow::Recurse
@@ -609,6 +611,7 @@ where
             fs(&stm)
         }
         StmX::Return { .. } => fs(stm),
+        StmX::Resolve(_) => fs(stm),
         StmX::BreakOrContinue { label: _, is_break: _ } => fs(stm),
         StmX::ClosureInner { body, typ_inv_vars } => {
             let body = map_stm_visitor(body, fs)?;
@@ -691,6 +694,7 @@ where
             Ok(Spanned::new(stm.span.clone(), StmX::DeadEnd(s)))
         }
         StmX::Return { .. } => Ok(stm.clone()),
+        StmX::Resolve(_) => Ok(stm.clone()),
         StmX::BreakOrContinue { label: _, is_break: _ } => Ok(stm.clone()),
         StmX::ClosureInner { body, typ_inv_vars } => {
             let body = fs(body)?;
@@ -765,7 +769,8 @@ where
         | StmX::Return { base_error: _, ret_exp: _, inside_body: _ }
         | StmX::BreakOrContinue { label: _, is_break: _ }
         | StmX::If(_, _, _)
-        | StmX::Block(_) => Ok(stm.clone()),
+        | StmX::Block(_)
+        | StmX::Resolve(_) => Ok(stm.clone()),
         StmX::Call { fun, resolved_method, mode, typ_args, args, split, dest } => {
             let typ_args = typ_args.iter().map(ft).collect::<Result<Vec<Typ>, _>>()?;
             let resolved_method = if let Some((f, ts)) = resolved_method {
@@ -924,6 +929,7 @@ where
                     StmX::OpenInvariant(inv, ident.clone(), ty.clone(), body.clone(), *atomicity),
                 )
             }
+            StmX::Resolve(_) => stm.clone(),
             StmX::Block(_) => stm.clone(),
         };
         Ok(stm)

@@ -733,6 +733,8 @@ pub enum ExprX {
     Ghost { alloc_wrapper: bool, tracked: bool, expr: Expr },
     /// Sequence of statements, optionally including an expression at the end
     Block(Stmts, Option<Expr>),
+    /// Resolve a &mut in a variable
+    Resolve(Ident),
 }
 
 /// Statement, similar to rustc_hir::Stmt

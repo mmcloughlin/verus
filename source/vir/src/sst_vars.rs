@@ -34,6 +34,7 @@ pub(crate) fn stm_assign(
     declared: &IndexMap<UniqueIdent, Typ>,
     assigned: &mut IndexSet<UniqueIdent>,
     modified: &mut IndexSet<UniqueIdent>,
+    unresolved: &mut IndexSet<UniqueIdent>,
     stm: &Stm,
 ) -> Stm {
     let result = match &stm.x {
@@ -41,7 +42,9 @@ pub(crate) fn stm_assign(
             if let Some(dest) = dest {
                 let var: UniqueIdent = get_loc_var(&dest.dest);
                 assigned.insert(var.clone());
-                if !dest.is_init {
+                if dest.is_init {
+                    unresolved.insert(var.clone());
+                } else {
                     modified.insert(var.clone());
                 }
             }
@@ -64,6 +67,10 @@ pub(crate) fn stm_assign(
             }
             stm.clone()
         }
+        StmX::Resolve(var) => {
+            unresolved.remove(var);
+            stm.clone()
+        }
         StmX::Assert(..)
         | StmX::AssertBitVector { .. }
         | StmX::AssertQuery { .. }
@@ -74,22 +81,26 @@ pub(crate) fn stm_assign(
         StmX::Assign { lhs: Dest { dest, is_init }, rhs: _ } => {
             let var = get_loc_var(dest);
             assigned.insert(var.clone());
-            if !is_init {
+            if *is_init {
+                unresolved.insert(var.clone());
+            } else {
                 modified.insert(var.clone());
             }
             stm.clone()
         }
         StmX::DeadEnd(s) => {
-            let s = stm_assign(assign_map, declared, assigned, modified, s);
+            let s = stm_assign(assign_map, declared, assigned, modified, unresolved, s);
             Spanned::new(stm.span.clone(), StmX::DeadEnd(s))
         }
         StmX::BreakOrContinue { label: _, is_break: _ } => stm.clone(),
         StmX::ClosureInner { body, typ_inv_vars } => {
             let pre_modified = modified.clone();
             let pre_assigned = assigned.clone();
-            let body = stm_assign(assign_map, declared, assigned, modified, body);
+            let pre_unresolved = unresolved.clone();
+            let body = stm_assign(assign_map, declared, assigned, modified, unresolved, body);
             *assigned = pre_assigned;
             *modified = pre_modified;
+            *unresolved = pre_unresolved;
 
             Spanned::new(
                 stm.span.clone(),
@@ -98,37 +109,53 @@ pub(crate) fn stm_assign(
         }
         StmX::If(cond, lhs, rhs) => {
             let mut pre_assigned = assigned.clone();
+            let mut pre_unresolved = unresolved.clone();
 
-            let lhs = stm_assign(assign_map, declared, assigned, modified, lhs);
+            let lhs = stm_assign(assign_map, declared, assigned, modified, unresolved, lhs);
             let lhs_assigned = assigned.clone();
+            let lhs_unresolved = unresolved.clone();
             *assigned = pre_assigned.clone();
+            *unresolved = pre_unresolved.clone();
 
-            let rhs = rhs.as_ref().map(|s| stm_assign(assign_map, declared, assigned, modified, s));
+            let rhs = rhs
+                .as_ref()
+                .map(|s| stm_assign(assign_map, declared, assigned, modified, unresolved, s));
             let rhs_assigned = &assigned;
+            let rhs_unresolved = &unresolved;
 
             for x in declared.keys() {
                 if lhs_assigned.contains(x) && rhs_assigned.contains(x) && !pre_assigned.contains(x)
                 {
                     pre_assigned.insert(x.clone());
                 }
+                if lhs_unresolved.contains(x)
+                    && rhs_unresolved.contains(x)
+                    && !pre_unresolved.contains(x)
+                {
+                    pre_unresolved.insert(x.clone());
+                }
             }
 
             *assigned = pre_assigned;
+            *unresolved = pre_unresolved;
             Spanned::new(stm.span.clone(), StmX::If(cond.clone(), lhs, rhs))
         }
         StmX::Loop { is_for_loop, label, cond, body, invs, typ_inv_vars, modified_vars } => {
             let mut pre_modified = modified.clone();
             *modified = IndexSet::new();
             let cond = if let Some((cond_stm, cond_exp)) = cond {
-                let cond_stm = stm_assign(assign_map, declared, assigned, modified, cond_stm);
+                let cond_stm =
+                    stm_assign(assign_map, declared, assigned, modified, unresolved, cond_stm);
                 Some((cond_stm, cond_exp.clone()))
             } else {
                 None
             };
 
             let pre_assigned = assigned.clone();
-            let body = stm_assign(assign_map, declared, assigned, modified, body);
+            let pre_unresolved = unresolved.clone();
+            let body = stm_assign(assign_map, declared, assigned, modified, unresolved, body);
             *assigned = pre_assigned;
+            *unresolved = pre_unresolved;
 
             assert!(modified_vars.len() == 0);
             let mut modified_vars: Vec<UniqueIdent> = Vec::new();
@@ -159,7 +186,8 @@ pub(crate) fn stm_assign(
         StmX::OpenInvariant(inv, ident, ty, body_stm, atomicity) => {
             assigned.insert(ident.clone());
             modified.insert(ident.clone());
-            let body_stm = stm_assign(assign_map, declared, assigned, modified, body_stm);
+            let body_stm =
+                stm_assign(assign_map, declared, assigned, modified, unresolved, body_stm);
             Spanned::new(
                 stm.span.clone(),
                 StmX::OpenInvariant(inv.clone(), ident.clone(), ty.clone(), body_stm, *atomicity),
@@ -167,7 +195,7 @@ pub(crate) fn stm_assign(
         }
         StmX::Block(stms) => {
             let mut pre_assigned = assigned.clone();
-            let stms = stms_assign(assign_map, declared, assigned, modified, stms);
+            let stms = stms_assign(assign_map, declared, assigned, modified, unresolved, stms);
             for x in declared.keys() {
                 if assigned.contains(x) && !pre_assigned.contains(x) {
                     pre_assigned.insert(x.clone());
@@ -187,9 +215,12 @@ pub(crate) fn stms_assign(
     declared: &IndexMap<UniqueIdent, Typ>,
     assigned: &mut IndexSet<UniqueIdent>,
     modified: &mut IndexSet<UniqueIdent>,
+    unresolved: &mut IndexSet<UniqueIdent>,
     stms: &Stms,
 ) -> Stms {
-    let stms: Vec<Stm> =
-        stms.iter().map(|s| stm_assign(assign_map, declared, assigned, modified, s)).collect();
+    let stms: Vec<Stm> = stms
+        .iter()
+        .map(|s| stm_assign(assign_map, declared, assigned, modified, unresolved, s))
+        .collect();
     Arc::new(stms)
 }

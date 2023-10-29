@@ -191,6 +191,7 @@ pub enum StmX {
         typ_inv_vars: Arc<Vec<(UniqueIdent, Typ)>>,
         body: Stm,
     },
+    Resolve(UniqueIdent),
 }
 
 pub type LocalDecl = Arc<LocalDeclX>;
