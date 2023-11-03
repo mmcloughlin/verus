@@ -96,6 +96,9 @@ impl rustc_driver::Callbacks for CompilerCallbacksEraseMacro {
         queries: &'tcx rustc_interface::Queries<'tcx>,
     ) -> rustc_driver::Compilation {
         if !self.do_compile {
+            // TODO queries.global_ctxt().expect("gc").enter(|e| {
+            // TODO     e.eval_to_const_value_raw(key)
+            // TODO });
             crate::lifetime::check(queries);
             rustc_driver::Compilation::Stop
         } else {

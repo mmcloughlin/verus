@@ -7,7 +7,7 @@ use common::*;
 // for stable guarantees about the size of Rust types
 
 test_verify_one_file! {
-    #[test] sizeof_test verus_code! {
+    #[test] sizeof_should_fail verus_code! {
         use vstd::layout::*;
         use std::sync::Arc;
         use std::rc::Rc;
@@ -82,4 +82,15 @@ test_verify_one_file! {
             assert(size_of::<V>() != 0); // FAILS
         }
     } => Err(err) => assert_fails(err, 12)
+}
+
+test_verify_one_file! {
+    #[test] sizeof_0 verus_code! {
+        use vstd::layout::*;
+
+        fn foo() {
+            let s = core::mem::size_of::<u64>();
+            assert(s == 8);
+        }
+    } => Ok(())
 }

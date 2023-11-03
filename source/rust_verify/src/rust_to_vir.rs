@@ -36,6 +36,8 @@ fn check_item<'tcx>(
     id: &ItemId,
     item: &'tcx Item<'tcx>,
 ) -> Result<(), VirErr> {
+    dbg!(&ctxt.tcx.data_layout.pointer_size);
+
     // delay computation of module_path because some external or builtin items don't have a valid Path
     let module_path = || {
         if let Some(Some(path)) = mpath {
@@ -110,7 +112,7 @@ fn check_item<'tcx>(
                         "a type cannot be marked both `external_type_specification` and `external`",
                     );
                 }
-
+                
                 let def_id = id.owner_id.to_def_id();
                 let path = def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, def_id);
                 vir.external_types.push(path);
