@@ -2466,3 +2466,21 @@ test_verify_one_file! {
         }
     } => Ok(())
 }
+
+test_verify_one_file! {
+    #[test] trait_definition_order_spec_proof verus_code! {
+        pub trait KeyTrait : Sized {
+            fn zero() -> (z: Self) ensures z == Self::zero_spec();
+
+            spec fn zero_spec() -> Self where Self: std::marker::Sized;
+        }
+        
+        pub struct KeyStruct { pub ukey: u64, }
+        
+        impl KeyTrait for KeyStruct {
+            fn zero() -> (z: Self) { KeyStruct{ukey: 0} }
+
+            open spec fn zero_spec() -> Self { KeyStruct{ukey: 0} }
+        }
+    } => Ok(())
+}

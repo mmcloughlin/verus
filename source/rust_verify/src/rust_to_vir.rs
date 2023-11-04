@@ -36,8 +36,6 @@ fn check_item<'tcx>(
     id: &ItemId,
     item: &'tcx Item<'tcx>,
 ) -> Result<(), VirErr> {
-    dbg!(&ctxt.tcx.data_layout.pointer_size);
-
     // delay computation of module_path because some external or builtin items don't have a valid Path
     let module_path = || {
         if let Some(Some(path)) = mpath {

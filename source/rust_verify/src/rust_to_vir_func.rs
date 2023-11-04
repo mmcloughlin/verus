@@ -11,6 +11,7 @@ use crate::util::{err_span, err_span_bare, unsupported_err_span};
 use crate::verus_items::{BuiltinTypeItem, VerusItem};
 use crate::{unsupported_err, unsupported_err_unless};
 use rustc_ast::Attribute;
+use rustc_const_eval::interpret::ImmTy;
 use rustc_hir::{
     def::Res, Body, BodyId, Crate, ExprKind, FnDecl, FnHeader, FnRetTy, FnSig, Generics, HirId,
     MaybeOwner, MutTy, Param, PrimTy, QPath, Ty, TyKind, Unsafety,
@@ -1038,7 +1039,27 @@ pub(crate) fn check_item_const_or_static<'tcx>(
         return Ok(());
     }
     let body = find_body(ctxt, body_id);
+    
+    
+
+    let substs = rustc_middle::ty::InternalSubsts::identity_for_item(ctxt.tcx, id);
+    let instance = rustc_middle::ty::Instance::new(id, substs);
+    ImmTy::
+
+    let cid = rustc_const_eval::interpret::GlobalId { instance, promoted: None };
+    let param_env = ctxt.tcx.param_env(id).with_reveal_all_normalized(ctxt.tcx);
+    let inputs = ctxt.tcx.erase_regions(param_env.and(cid));
+    
+    eval_nullary_intrinsic(ctxt.tcx, param_env, id, substs);
+
+    dbg!(&ctxt.tcx.const_eval_global_id(param_env, cid, None));
+    dbg!(&ctxt.tcx.const_eval_poly(id));
+    dbg!(&body);
+
     let mut vir_body = body_to_vir(ctxt, id, body_id, body, body_mode, vattrs.external_body)?;
+    
+    dbg!(&vir_body);
+    
     let header = vir::headers::read_header(&mut vir_body)?;
     if header.require.len() + header.recommend.len() > 0 {
         return err_span(span, "consts cannot have requires/recommends");
