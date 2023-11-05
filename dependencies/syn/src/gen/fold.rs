@@ -191,6 +191,9 @@ pub trait Fold {
     fn fold_expr_for_loop(&mut self, i: ExprForLoop) -> ExprForLoop {
         fold_expr_for_loop(self, i)
     }
+    fn fold_expr_get_field(&mut self, i: ExprGetField) -> ExprGetField {
+        fold_expr_get_field(self, i)
+    }
     #[cfg(feature = "full")]
     fn fold_expr_group(&mut self, i: ExprGroup) -> ExprGroup {
         fold_expr_group(self, i)
@@ -1403,6 +1406,7 @@ where
         Expr::BigOr(_binding_0) => Expr::BigOr(f.fold_big_or(_binding_0)),
         Expr::Is(_binding_0) => Expr::Is(f.fold_expr_is(_binding_0)),
         Expr::Has(_binding_0) => Expr::Has(f.fold_expr_has(_binding_0)),
+        Expr::GetField(_binding_0) => Expr::GetField(f.fold_expr_get_field(_binding_0)),
         #[cfg(syn_no_non_exhaustive)]
         _ => unreachable!(),
     }
@@ -1593,6 +1597,17 @@ where
         in_token: Token![in](tokens_helper(f, &node.in_token.span)),
         expr: Box::new(f.fold_expr(*node.expr)),
         body: f.fold_block(node.body),
+    }
+}
+pub fn fold_expr_get_field<F>(f: &mut F, node: ExprGetField) -> ExprGetField
+where
+    F: Fold + ?Sized,
+{
+    ExprGetField {
+        attrs: FoldHelper::lift(node.attrs, |it| f.fold_attribute(it)),
+        base: Box::new(f.fold_expr(*node.base)),
+        arrow_token: Token![->](tokens_helper(f, &node.arrow_token.spans)),
+        member: f.fold_member(node.member),
     }
 }
 #[cfg(feature = "full")]

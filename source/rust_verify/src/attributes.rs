@@ -266,6 +266,8 @@ pub(crate) enum Attr {
     InternalRevealFn,
     // Marks trusted code
     Trusted,
+    // Marks generated -> functions that are unsupported because a field appears in multiple variants
+    InternalGetFieldManyVariants,
 }
 
 fn get_trigger_arg(span: Span, attr_tree: &AttrTree) -> Result<u64, VirErr> {
@@ -522,6 +524,9 @@ pub(crate) fn parse_attrs(
                     AttrTree::Fun(_, arg, None) if arg == "unwrapped_binding" => {
                         v.push(Attr::UnwrappedBinding)
                     }
+                    AttrTree::Fun(_, arg, None) if arg == "get_field_many_variants" => {
+                        v.push(Attr::InternalGetFieldManyVariants)
+                    }
                     _ => {
                         return err_span(span, "unrecognized internal attribute");
                     }
@@ -663,6 +668,7 @@ pub(crate) struct VerifierAttrs {
     pub(crate) unwrapped_binding: bool,
     pub(crate) internal_reveal_fn: bool,
     pub(crate) trusted: bool,
+    pub(crate) internal_get_field_many_variants: bool,
 }
 
 pub(crate) fn get_verifier_attrs(
@@ -700,6 +706,7 @@ pub(crate) fn get_verifier_attrs(
         unwrapped_binding: false,
         internal_reveal_fn: false,
         trusted: false,
+        internal_get_field_many_variants: false,
     };
     for attr in parse_attrs(attrs, diagnostics)? {
         match attr {
@@ -743,6 +750,7 @@ pub(crate) fn get_verifier_attrs(
             Attr::UnwrappedBinding => vs.unwrapped_binding = true,
             Attr::InternalRevealFn => vs.internal_reveal_fn = true,
             Attr::Trusted => vs.trusted = true,
+            Attr::InternalGetFieldManyVariants => vs.internal_get_field_many_variants = true,
             _ => {}
         }
     }

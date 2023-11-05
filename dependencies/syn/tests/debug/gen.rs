@@ -1547,6 +1547,15 @@ impl Debug for Lite<syn::Expr> {
                 formatter.field("rhs", Lite(&_val.rhs));
                 formatter.finish()
             }
+            syn::Expr::GetField(_val) => {
+                let mut formatter = formatter.debug_struct("Expr::GetField");
+                if !_val.attrs.is_empty() {
+                    formatter.field("attrs", Lite(&_val.attrs));
+                }
+                formatter.field("base", Lite(&_val.base));
+                formatter.field("member", Lite(&_val.member));
+                formatter.finish()
+            }
             _ => unreachable!(),
         }
     }
@@ -1892,6 +1901,18 @@ impl Debug for Lite<syn::ExprForLoop> {
         formatter.field("pat", Lite(&_val.pat));
         formatter.field("expr", Lite(&_val.expr));
         formatter.field("body", Lite(&_val.body));
+        formatter.finish()
+    }
+}
+impl Debug for Lite<syn::ExprGetField> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let _val = &self.value;
+        let mut formatter = formatter.debug_struct("ExprGetField");
+        if !_val.attrs.is_empty() {
+            formatter.field("attrs", Lite(&_val.attrs));
+        }
+        formatter.field("base", Lite(&_val.base));
+        formatter.field("member", Lite(&_val.member));
         formatter.finish()
     }
 }

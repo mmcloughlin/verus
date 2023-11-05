@@ -387,6 +387,8 @@ impl Clone for Expr {
             Expr::Is(v0) => Expr::Is(v0.clone()),
             #[cfg(feature = "full")]
             Expr::Has(v0) => Expr::Has(v0.clone()),
+            #[cfg(feature = "full")]
+            Expr::GetField(v0) => Expr::GetField(v0.clone()),
             #[cfg(any(syn_no_non_exhaustive, not(feature = "full")))]
             _ => unreachable!(),
         }
@@ -576,6 +578,17 @@ impl Clone for ExprForLoop {
             in_token: self.in_token.clone(),
             expr: self.expr.clone(),
             body: self.body.clone(),
+        }
+    }
+}
+#[cfg_attr(doc_cfg, doc(cfg(feature = "clone-impls")))]
+impl Clone for ExprGetField {
+    fn clone(&self) -> Self {
+        ExprGetField {
+            attrs: self.attrs.clone(),
+            base: self.base.clone(),
+            arrow_token: self.arrow_token.clone(),
+            member: self.member.clone(),
         }
     }
 }

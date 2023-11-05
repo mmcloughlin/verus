@@ -193,6 +193,9 @@ pub trait Visit<'ast> {
     fn visit_expr_for_loop(&mut self, i: &'ast ExprForLoop) {
         visit_expr_for_loop(self, i);
     }
+    fn visit_expr_get_field(&mut self, i: &'ast ExprGetField) {
+        visit_expr_get_field(self, i);
+    }
     #[cfg(feature = "full")]
     fn visit_expr_group(&mut self, i: &'ast ExprGroup) {
         visit_expr_group(self, i);
@@ -1496,6 +1499,9 @@ where
         Expr::Has(_binding_0) => {
             v.visit_expr_has(_binding_0);
         }
+        Expr::GetField(_binding_0) => {
+            v.visit_expr_get_field(_binding_0);
+        }
         #[cfg(syn_no_non_exhaustive)]
         _ => unreachable!(),
     }
@@ -1728,6 +1734,17 @@ where
     tokens_helper(v, &node.in_token.span);
     v.visit_expr(&*node.expr);
     v.visit_block(&node.body);
+}
+pub fn visit_expr_get_field<'ast, V>(v: &mut V, node: &'ast ExprGetField)
+where
+    V: Visit<'ast> + ?Sized,
+{
+    for it in &node.attrs {
+        v.visit_attribute(it);
+    }
+    v.visit_expr(&*node.base);
+    tokens_helper(v, &node.arrow_token.spans);
+    v.visit_member(&node.member);
 }
 #[cfg(feature = "full")]
 pub fn visit_expr_group<'ast, V>(v: &mut V, node: &'ast ExprGroup)
