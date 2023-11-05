@@ -1547,6 +1547,16 @@ impl Debug for Lite<syn::Expr> {
                 formatter.field("rhs", Lite(&_val.rhs));
                 formatter.finish()
             }
+            syn::Expr::Matches(_val) => {
+                let mut formatter = formatter.debug_struct("Expr::Matches");
+                if !_val.attrs.is_empty() {
+                    formatter.field("attrs", Lite(&_val.attrs));
+                }
+                formatter.field("lhs", Lite(&_val.lhs));
+                formatter.field("pat", Lite(&_val.pat));
+                formatter.field("rhs", Lite(&_val.rhs));
+                formatter.finish()
+            }
             syn::Expr::GetField(_val) => {
                 let mut formatter = formatter.debug_struct("Expr::GetField");
                 if !_val.attrs.is_empty() {
@@ -2127,6 +2137,19 @@ impl Debug for Lite<syn::ExprMatch> {
         if !_val.arms.is_empty() {
             formatter.field("arms", Lite(&_val.arms));
         }
+        formatter.finish()
+    }
+}
+impl Debug for Lite<syn::ExprMatches> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let _val = &self.value;
+        let mut formatter = formatter.debug_struct("ExprMatches");
+        if !_val.attrs.is_empty() {
+            formatter.field("attrs", Lite(&_val.attrs));
+        }
+        formatter.field("lhs", Lite(&_val.lhs));
+        formatter.field("pat", Lite(&_val.pat));
+        formatter.field("rhs", Lite(&_val.rhs));
         formatter.finish()
     }
 }

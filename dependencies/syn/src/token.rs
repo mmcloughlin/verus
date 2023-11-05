@@ -735,6 +735,7 @@ define_keywords! {
     "any"         pub struct InvAny       /// `any`
     "none"        pub struct InvNone      /// `none`
     "has"         pub struct Has          /// `has`
+    "matches"     pub struct Matches      /// `matches`
 }
 
 define_punctuation! {
@@ -949,6 +950,7 @@ macro_rules! export_token_macro {
             [choose]      => { $crate::token::Choose };
             [is]          => { $crate::token::Is };
             [has]         => { $crate::token::Has };
+            [matches]     => { $crate::token::Matches };
             [FnSpec]      => { $crate::token::FnSpec };
             [&&&]         => { $crate::token::BigAnd };
             [|||]         => { $crate::token::BigOr };

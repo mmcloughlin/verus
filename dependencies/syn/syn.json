@@ -1113,6 +1113,11 @@
             "syn": "ExprHas"
           }
         ],
+        "Matches": [
+          {
+            "syn": "ExprMatches"
+          }
+        ],
         "GetField": [
           {
             "syn": "ExprGetField"
@@ -1882,6 +1887,38 @@
         "arms": {
           "vec": {
             "syn": "Arm"
+          }
+        }
+      }
+    },
+    {
+      "ident": "ExprMatches",
+      "features": {
+        "any": []
+      },
+      "fields": {
+        "attrs": {
+          "vec": {
+            "syn": "Attribute"
+          }
+        },
+        "lhs": {
+          "box": {
+            "syn": "Expr"
+          }
+        },
+        "matches_token": {
+          "token": "Matches"
+        },
+        "pat": {
+          "syn": "Pat"
+        },
+        "implies_token": {
+          "token": "Imply"
+        },
+        "rhs": {
+          "box": {
+            "syn": "Expr"
           }
         }
       }
@@ -6702,6 +6739,7 @@
     "Lt": "<",
     "Macro": "macro",
     "Match": "match",
+    "Matches": "matches",
     "Mod": "mod",
     "Move": "move",
     "MulEq": "*=",

@@ -235,6 +235,7 @@ ast_enum_of_structs! {
         BigOr(BigOr),
         Is(ExprIs),
         Has(ExprHas),
+        Matches(ExprMatches),
         GetField(ExprGetField),
 
         // Not public API.
@@ -863,7 +864,8 @@ impl Expr {
             | Expr::Is(ExprIs { attrs, .. })
             | Expr::Has(ExprHas { attrs, .. })
             | Expr::Yield(ExprYield { attrs, .. })
-            | Expr::GetField(ExprGetField { attrs, .. }) => mem::replace(attrs, new),
+            | Expr::GetField(ExprGetField { attrs, .. })
+            | Expr::Matches(ExprMatches { attrs, .. }) => mem::replace(attrs, new),
             Expr::Verbatim(_) => Vec::new(),
             Expr::BigAnd(_) => Vec::new(),
             Expr::BigOr(_) => Vec::new(),
@@ -1171,7 +1173,7 @@ pub(crate) mod parsing {
         Arithmetic,
         Term,
         Cast,
-        HasIs,
+        HasIsMatches,
     }
 
     #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1241,7 +1243,7 @@ pub(crate) mod parsing {
                 | Precedence::Arithmetic
                 | Precedence::Term
                 | Precedence::Cast
-                | Precedence::HasIs => Associativity::Left,
+                | Precedence::HasIsMatches => Associativity::Left,
             }
         }
     }
@@ -1491,7 +1493,7 @@ pub(crate) mod parsing {
                     colon_token,
                     ty: Box::new(ty),
                 });
-            } else if Precedence::HasIs >= base && input.peek(Token![is]) {
+            } else if Precedence::HasIsMatches >= base && input.peek(Token![is]) {
                 let is_token: Token![is] = input.parse()?;
                 let variant_ident = input.parse()?;
                 lhs = Expr::Is(ExprIs {
@@ -1500,13 +1502,34 @@ pub(crate) mod parsing {
                     is_token,
                     variant_ident,
                 });
-            } else if Precedence::HasIs >= base && input.peek(Token![has]) {
+            } else if Precedence::HasIsMatches >= base && input.peek(Token![has]) {
                 let has_token: Token![has] = input.parse()?;
                 let rhs = unary_expr(input, allow_struct)?;
                 lhs = Expr::Has(ExprHas {
                     attrs: Vec::new(),
                     lhs: Box::new(lhs),
                     has_token,
+                    rhs: Box::new(rhs),
+                });
+            } else if Precedence::HasIsMatches >= base && input.peek(Token![matches]) {
+                let matches_token: Token![matches] = input.parse()?;
+                let pat = input.parse()?;
+                let implies_token = input.parse()?;
+                let mut rhs = unary_expr(input, allow_struct)?;
+                loop {
+                    let next = peek_precedence(input);
+                    if next >= Precedence::Assign {
+                        rhs = parse_expr(input, rhs, allow_struct, next)?;
+                    } else {
+                        break;
+                    }
+                }
+                lhs = Expr::Matches(ExprMatches {
+                    attrs: Vec::new(),
+                    lhs: Box::new(lhs),
+                    matches_token,
+                    pat,
+                    implies_token,
                     rhs: Box::new(rhs),
                 });
             } else {
@@ -1580,8 +1603,8 @@ pub(crate) mod parsing {
         if input.peek(Token![&&&]) || input.peek(Token![|||]) {
             return Precedence::Any;
         }
-        if input.peek(Token![is]) || input.peek(Token![has]) {
-            Precedence::HasIs
+        if input.peek(Token![is]) || input.peek(Token![has]) || input.peek(Token![matches]) {
+            Precedence::HasIsMatches
         } else if let Ok(op) = input.fork().parse() {
             Precedence::of(&op)
         } else if input.peek(Token![=]) && !input.peek(Token![=>]) {
@@ -2279,7 +2302,10 @@ pub(crate) mod parsing {
             return parse_expr(input, expr, allow_struct, Precedence::Any);
         };
 
-        if input.peek(Token![.]) && !input.peek(Token![..]) || input.peek(Token![?]) || input.peek(Token![->]) {
+        if input.peek(Token![.]) && !input.peek(Token![..])
+            || input.peek(Token![?])
+            || input.peek(Token![->])
+        {
             expr = trailer_helper(input, expr)?;
 
             attrs.extend(expr.replace_attrs(Vec::new()));
@@ -3200,7 +3226,9 @@ pub(crate) mod parsing {
             if input.peek(Token![.]) {
                 if input.peek2(token::Await) {
                     "`.await`"
-                } else if input.peek2(Ident) && (input.peek3(token::Paren) || input.peek3(Token![::])) {
+                } else if input.peek2(Ident)
+                    && (input.peek3(token::Paren) || input.peek3(Token![::]))
+                {
                     "a method call"
                 } else {
                     "a field access"
