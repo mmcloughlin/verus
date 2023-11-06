@@ -5,6 +5,7 @@ use proc_macro2::TokenStream;
 use proc_macro2::TokenTree;
 use quote::{quote, quote_spanned};
 use std::collections::HashMap;
+#[allow(unused_imports)]
 use std::iter::FromIterator;
 use syn_verus::parse::{Parse, ParseStream};
 use syn_verus::punctuated::Punctuated;
@@ -988,6 +989,8 @@ impl Visitor {
                 syn_verus::Fields::Unit => {}
             }
         }
+
+        #[cfg(verus_keep_ghost)]
         if !self.erase_ghost.erase() && !allow_inconsistent_fields {
             for invalid_field in invalid_fields {
                 proc_macro::Diagnostic::spanned(enum_.span().unwrap(), proc_macro::Level::Warning, {
@@ -995,6 +998,7 @@ impl Visitor {
                 }).emit();
             }
         }
+
         let enum_vis_pub = !matches!(enum_.vis, syn_verus::Visibility::Inherited);
         if all_fields.len() != 0 {
             let enum_ident = &enum_.ident;
