@@ -735,6 +735,8 @@ define_keywords! {
     "any"         pub struct InvAny       /// `any`
     "none"        pub struct InvNone      /// `none`
     "has"         pub struct Has          /// `has`
+    "global"      pub struct Global       /// `global`
+    "size_of"     pub struct SizeOf       /// `size_of`
     "matches"     pub struct Matches      /// `matches`
 }
 
@@ -950,6 +952,8 @@ macro_rules! export_token_macro {
             [choose]      => { $crate::token::Choose };
             [is]          => { $crate::token::Is };
             [has]         => { $crate::token::Has };
+            [global]      => { $crate::token::Global };
+            [size_of]     => { $crate::token::SizeOf };
             [matches]     => { $crate::token::Matches };
             [FnSpec]      => { $crate::token::FnSpec };
             [&&&]         => { $crate::token::BigAnd };

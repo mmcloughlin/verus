@@ -266,6 +266,8 @@ pub(crate) enum Attr {
     InternalRevealFn,
     // Marks trusted code
     Trusted,
+    // global size_of
+    SizeOfGlobal,
     // Marks generated -> functions that are unsupported because a field appears in multiple variants
     InternalGetFieldManyVariants,
 }
@@ -524,6 +526,7 @@ pub(crate) fn parse_attrs(
                     AttrTree::Fun(_, arg, None) if arg == "unwrapped_binding" => {
                         v.push(Attr::UnwrappedBinding)
                     }
+                    AttrTree::Fun(_, arg, None) if arg == "size_of" => v.push(Attr::SizeOfGlobal),
                     AttrTree::Fun(_, arg, None) if arg == "get_field_many_variants" => {
                         v.push(Attr::InternalGetFieldManyVariants)
                     }
@@ -668,6 +671,7 @@ pub(crate) struct VerifierAttrs {
     pub(crate) unwrapped_binding: bool,
     pub(crate) internal_reveal_fn: bool,
     pub(crate) trusted: bool,
+    pub(crate) size_of_global: bool,
     pub(crate) internal_get_field_many_variants: bool,
 }
 
@@ -706,6 +710,7 @@ pub(crate) fn get_verifier_attrs(
         unwrapped_binding: false,
         internal_reveal_fn: false,
         trusted: false,
+        size_of_global: false,
         internal_get_field_many_variants: false,
     };
     for attr in parse_attrs(attrs, diagnostics)? {
@@ -750,6 +755,7 @@ pub(crate) fn get_verifier_attrs(
             Attr::UnwrappedBinding => vs.unwrapped_binding = true,
             Attr::InternalRevealFn => vs.internal_reveal_fn = true,
             Attr::Trusted => vs.trusted = true,
+            Attr::SizeOfGlobal => vs.size_of_global = true,
             Attr::InternalGetFieldManyVariants => vs.internal_get_field_many_variants = true,
             _ => {}
         }
