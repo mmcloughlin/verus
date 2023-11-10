@@ -1971,7 +1971,6 @@ impl Verifier {
 
         let mut crate_names: Vec<String> = vec![crate_name];
         crate_names.extend(other_crate_names.into_iter());
-        let mut vir_crates: Vec<Krate> = other_vir_crates;
         // TODO vec![vir::builtins::builtin_krate(&self.air_no_span.clone().unwrap())];
 
         let erasure_info = ErasureInfo {
@@ -1990,6 +1989,17 @@ impl Verifier {
         } else {
             None
         };
+        let external_type_specs = {
+            let mut external_type_specs = HashMap::new();
+            for krate in &other_vir_crates {
+                for dt in &krate.datatypes {
+                    if let Some(proxy) = &dt.x.proxy {
+                        assert!(external_type_specs.insert(dt.x.path.clone(), proxy.x.clone()).is_none());
+                    }
+                }
+            }
+            external_type_specs
+        };
         let mut ctxt = Arc::new(ContextX {
             cmd_line_args: self.args.clone(),
             tcx,
@@ -2001,6 +2011,7 @@ impl Verifier {
             diagnostics: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
             no_vstd: self.args.no_vstd,
             arch_word_bits: None,
+            external_type_specs,
         });
         let multi_crate = self.args.export.is_some() || import_len > 0;
         crate::rust_to_vir_base::MULTI_CRATE
@@ -2035,6 +2046,7 @@ impl Verifier {
         // If this turns out to be slow, we could keep the library crates separate from
         // the new crate.  (We do need to have all the crate definitions available in some form,
         // because well_formed and modes checking look up definitions from libraries.)
+        let mut vir_crates: Vec<Krate> = other_vir_crates;
         vir_crates.push(vir_crate);
         let vir_crate = vir::ast_simplify::merge_krates(vir_crates).map_err(map_err_diagnostics)?;
 

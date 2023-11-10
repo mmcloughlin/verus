@@ -103,4 +103,12 @@ declare_tuple_view!([0 1], [A0 A1]);
 declare_tuple_view!([0 1 2], [A0 A1 A2]);
 declare_tuple_view!([0 1 2 3], [A0 A1 A2 A3]);
 
+//
+// EqIsViewEq
+//
+
+#[cfg_attr(verus_keep_ghost, rustc_diagnostic_item = "verus::pervasive::view::EqIsViewEq")]
+#[verifier::external]
+pub trait EqIsViewEq { }
+
 } // verus!

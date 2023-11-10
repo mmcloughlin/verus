@@ -708,6 +708,13 @@ pub(crate) fn typ_of_node_expect_mut_ref<'tcx>(
     }
 }
 
+pub(crate) fn implements_eq_is_view_eq<'tcx>(
+    ctxt: &Context<'tcx>,
+    ty: rustc_middle::ty::Ty<'tcx>,
+) -> bool {
+    todo!()
+}
+
 pub(crate) fn implements_structural<'tcx>(
     ctxt: &Context<'tcx>,
     ty: rustc_middle::ty::Ty<'tcx>,
@@ -719,8 +726,7 @@ pub(crate) fn implements_structural<'tcx>(
         .expect("structural trait is not defined");
 
     use crate::rustc_middle::ty::TypeVisitableExt;
-    let infcx = ctxt.tcx.infer_ctxt().build(); // TODO(main_new) correct?
-    let ty = ctxt.tcx.erase_regions(ty);
+    let infcx = ctxt.tcx.infer_ctxt().ignoring_regions().build();
     if ty.has_escaping_bound_vars() {
         return false;
     }

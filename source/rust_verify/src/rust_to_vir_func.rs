@@ -966,16 +966,24 @@ pub(crate) fn get_external_def_id<'tcx>(
             rustc_middle::ty::Instance::resolve(tcx, param_env, external_id, normalized_substs);
         if let Ok(Some(inst)) = inst {
             if let rustc_middle::ty::InstanceDef::Item(did) = inst.def {
+                dbg!(&did);
                 let trait_path = def_id_to_vir_path(tcx, verus_items, trait_def_id);
                 let kind = FunctionKind::ForeignTraitMethodImpl(trait_path);
                 return Ok((did, kind));
+            } else {
+                return err_span(
+                    sig.span,
+                    "external_fn_specification not supported for this trait functions",
+                );
             }
-        }
+        } else {
+            dbg!(&trait_def_id);
 
-        return err_span(
-            sig.span,
-            "external_fn_specification not supported for unresolved trait functions",
-        );
+            return err_span(
+                sig.span,
+                "external_fn_specification not supported for unresolved trait functions",
+            );
+        }
     } else {
         Ok((external_id, FunctionKind::Static))
     }

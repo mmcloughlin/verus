@@ -15,6 +15,9 @@ verus!{
 #[verifier::reject_recursive_types(A)]
 pub struct ExVec<T, A: Allocator>(Vec<T, A>);
 
+#[verifier::external]
+impl<T: EqIsViewEq, A: Allocator> EqIsViewEq for ExVec<T, A> { }
+
 #[verifier(external_type_specification)]
 #[verifier(external_body)]
 pub struct ExGlobal(alloc::alloc::Global);

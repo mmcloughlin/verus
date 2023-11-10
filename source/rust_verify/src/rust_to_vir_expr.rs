@@ -1312,11 +1312,13 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
             let vlhs = expr_to_vir(bctx, lhs, modifier)?;
             let vrhs = expr_to_vir(bctx, rhs, modifier)?;
             match op.node {
-                BinOpKind::Eq | BinOpKind::Ne => unsupported_err_unless!(
-                    is_smt_equality(bctx, expr.span, &lhs.hir_id, &rhs.hir_id)?,
-                    expr.span,
-                    "==/!= for non smt equality types"
-                ),
+                BinOpKind::Eq | BinOpKind::Ne => {
+                    unsupported_err_unless!(
+                        is_smt_equality(bctx, expr.span, &lhs.hir_id, &rhs.hir_id)?,
+                        expr.span,
+                        "==/!= for non smt equality types"
+                    )
+                }
                 BinOpKind::Add
                 | BinOpKind::Sub
                 | BinOpKind::Mul

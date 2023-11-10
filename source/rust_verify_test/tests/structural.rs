@@ -84,3 +84,19 @@ test_verify_one_file! {
         }
     } => Err(err) => assert_rust_error_msg(err, "the trait bound `Other: builtin::Structural` is not satisfied")
 }
+
+test_verify_one_file! {
+    #[test] test_structural_vec verus_code! {
+        use vstd::prelude::*;
+
+        fn c(a: Vec<u8>, b: Vec<u8>)
+            requires a@ == b@
+        {
+            if a == b {
+                assert(true);
+            } else {
+                unreached()
+            }
+        }
+    } => Ok(())
+}

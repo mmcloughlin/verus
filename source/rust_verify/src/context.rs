@@ -4,7 +4,7 @@ use rustc_middle::ty::{TyCtxt, TypeckResults};
 use rustc_span::def_id::DefId;
 use rustc_span::SpanData;
 use std::sync::Arc;
-use vir::ast::{Expr, Ident, Mode, Pattern};
+use vir::ast::{Expr, Ident, Mode, Pattern, Path};
 use vir::messages::AstId;
 
 pub struct ErasureInfo {
@@ -32,6 +32,7 @@ pub struct ContextX<'tcx> {
     pub(crate) diagnostics: std::rc::Rc<std::cell::RefCell<Vec<vir::ast::VirErrAs>>>,
     pub(crate) no_vstd: bool,
     pub(crate) arch_word_bits: Option<vir::ast::ArchWordBits>,
+    pub(crate) external_type_specs: std::collections::HashMap<Path, Path>,
 }
 
 #[derive(Clone)]

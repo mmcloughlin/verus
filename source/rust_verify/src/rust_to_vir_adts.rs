@@ -125,32 +125,8 @@ pub fn check_item_struct<'tcx>(
     assert!(adt_def.is_struct());
     let vattrs = get_verifier_attrs(attrs, Some(&mut *ctxt.diagnostics.borrow_mut()))?;
 
-    let is_strslice_struct = matches!(
-        ctxt.verus_items.id_to_name.get(&id.owner_id.to_def_id()),
-        Some(&VerusItem::Pervasive(PervasiveItem::StrSlice, _))
-    );
-
-    if is_strslice_struct {
-        if vattrs.external_type_specification {
-            return err_span(span, "external_type_specification not supported with strslice");
-        }
-
-        return Ok(());
-    }
-
     if vattrs.external_type_specification {
-        return check_item_external(
-            ctxt,
-            vir,
-            module_path,
-            span,
-            id,
-            visibility,
-            attrs,
-            &vattrs,
-            generics,
-            adt_def,
-        );
+        return Ok(()); // already handled in `check_item_early`
     }
 
     let def_id = id.owner_id.to_def_id();
@@ -291,8 +267,8 @@ pub fn check_item_enum<'tcx>(
     Ok(())
 }
 
-pub(crate) fn check_item_external<'tcx>(
-    ctxt: &Context<'tcx>,
+pub(crate) fn check_item_external_early<'tcx>(
+    ctxt: &mut Context<'tcx>,
     vir: &mut KrateX,
     module_path: &Path,
     span: Span,
@@ -313,7 +289,7 @@ pub(crate) fn check_item_external<'tcx>(
     //    where we want to have the variants and fields be public.
     // (This is a distinction that doesn't exist for exec functions,
     // whose bodies are never exported.)
-
+    
     let mode = get_mode(Mode::Exec, attrs);
     if mode != Mode::Exec {
         return err_span(span, "external_type_specification can only be used with exec types");
@@ -441,8 +417,10 @@ pub(crate) fn check_item_external<'tcx>(
     }
 
     // Turn it into VIR
-
+    
     let def_id = id.owner_id.to_def_id();
+    let path = def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, external_def_id);
+
     let (typ_params, typ_bounds) = check_generics_bounds(
         ctxt.tcx,
         &ctxt.verus_items,
@@ -454,7 +432,6 @@ pub(crate) fn check_item_external<'tcx>(
     )?;
     let mode = Mode::Exec;
 
-    let path = def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, external_def_id);
     let name = path.segments.last().expect("unexpected struct path");
 
     if path.krate == Some(Arc::new("builtin".to_string())) {
@@ -462,9 +439,18 @@ pub(crate) fn check_item_external<'tcx>(
     }
 
     let proxy_path = def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, proxy_adt_def.did());
+
+    if Arc::make_mut(ctxt).external_type_specs.insert(path.clone(), proxy_path.clone()).is_some() {
+        return err_span(span, format!(
+            "duplicate specification for `{:}`",
+            vir::ast_util::path_as_friendly_rust_name(&path),
+        ));
+    }
+
     let proxy = ctxt.spanned_new(span, proxy_path);
     let proxy = Some((*proxy).clone());
     let owning_module = Some(module_path.clone());
+
 
     if vattrs.external_body {
         let transparency = DatatypeTransparency::Never;

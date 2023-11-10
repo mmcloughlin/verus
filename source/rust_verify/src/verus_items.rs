@@ -279,6 +279,7 @@ pub(crate) enum PervasiveItem {
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Hash)]
 pub(crate) enum MarkerItem {
     Structural,
+    EqIsViewEq,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Hash)]
@@ -463,6 +464,7 @@ fn verus_items_map() -> Vec<(&'static str, VerusItem)> {
             // SeqFn(vir::interpreter::SeqFn::Last    ))),
 
         ("verus::builtin::Structural",              VerusItem::Marker(MarkerItem::Structural)),
+        ("verus::pervasive::view::EqIsViewEq",              VerusItem::Marker(MarkerItem::EqIsViewEq)),
 
         ("verus::builtin::int",                     VerusItem::BuiltinType(BuiltinTypeItem::Int)),
         ("verus::builtin::nat",                     VerusItem::BuiltinType(BuiltinTypeItem::Nat)),

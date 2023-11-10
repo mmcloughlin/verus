@@ -29,6 +29,100 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use vir::ast::{Fun, FunX, FunctionKind, Krate, KrateX, Path, Typ, VirErr};
 
+fn check_item_early<'tcx>(
+    ctxt: &mut Context<'tcx>,
+    vir: &mut KrateX,
+    mpath: Option<&Option<Path>>,
+    id: &ItemId,
+    item: &'tcx Item<'tcx>,
+) -> Result<(), VirErr> {
+    // TODO deduplicate
+    let module_path = || {
+        if let Some(Some(path)) = mpath {
+            path.clone()
+        } else {
+            let owned_by = ctxt.krate.owners[item.hir_id().owner.def_id]
+                .as_owner()
+                .as_ref()
+                .expect("owner of item")
+                .node();
+            def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, owned_by.def_id().to_def_id())
+        }
+    };
+
+    let attrs = ctxt.tcx.hir().attrs(item.hir_id());
+    let vattrs = get_verifier_attrs(attrs, Some(&mut *ctxt.diagnostics.borrow_mut()))?;
+
+    if vattrs.external_type_specification && !matches!(&item.kind, ItemKind::Struct(..)) {
+        if matches!(&item.kind, ItemKind::Enum(..)) {
+            return err_span(
+                item.span,
+                "`external_type_specification` proxy type should use a struct with a single field to declare the external type (even if the external type is an enum)",
+            );
+        } else {
+            return err_span(
+                item.span,
+                "`external_type_specification` attribute not supported here",
+            );
+        }
+    }
+
+    // TODO deduplicate?
+    let visibility = || mk_visibility(ctxt, item.owner_id.to_def_id());
+
+    match &item.kind {
+        ItemKind::Struct(_variant_data, generics) => {
+            if vattrs.is_external(&ctxt.cmd_line_args) {
+                if vattrs.external_type_specification {
+                    return err_span(
+                        item.span,
+                        "a type cannot be marked both `external_type_specification` and `external`",
+                    );
+                }
+
+                let def_id = id.owner_id.to_def_id();
+                let path = def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, def_id);
+                vir.external_types.push(path);
+                return Ok(());
+            }
+
+            let is_strslice_struct = matches!(
+                ctxt.verus_items.id_to_name.get(&id.owner_id.to_def_id()),
+                Some(&VerusItem::Pervasive(verus_items::PervasiveItem::StrSlice, _))
+            );
+
+            if is_strslice_struct {
+                if vattrs.external_type_specification {
+                    return err_span(item.span, "external_type_specification not supported with strslice");
+                }
+
+                return Ok(());
+            }
+
+            if vattrs.external_type_specification {
+                let tyof = ctxt.tcx.type_of(item.owner_id.to_def_id()).skip_binder();
+                let adt_def = tyof.ty_adt_def().expect("adt_def");
+
+                return crate::rust_to_vir_adts::check_item_external_early(
+                    ctxt,
+                    vir,
+                    &module_path(),
+                    item.span,
+                    id,
+                    visibility(),
+                    attrs,
+                    &vattrs,
+                    generics,
+                    adt_def,
+                );
+            }
+
+            return Ok(());
+        }
+        _ => Ok(()),
+    }
+}
+
 fn check_item<'tcx>(
     ctxt: &Context<'tcx>,
     vir: &mut KrateX,
@@ -58,23 +152,14 @@ fn check_item<'tcx>(
     if vattrs.external_fn_specification && !matches!(&item.kind, ItemKind::Fn(..)) {
         return err_span(item.span, "`external_fn_specification` attribute not supported here");
     }
-    if vattrs.external_type_specification && !matches!(&item.kind, ItemKind::Struct(..)) {
-        if matches!(&item.kind, ItemKind::Enum(..)) {
-            return err_span(
-                item.span,
-                "`external_type_specification` proxy type should use a struct with a single field to declare the external type (even if the external type is an enum)",
-            );
-        } else {
-            return err_span(
-                item.span,
-                "`external_type_specification` attribute not supported here",
-            );
-        }
+    if vattrs.external_type_specification {
+        return Ok(()); // already handled by check_item_early
     }
 
     let visibility = || mk_visibility(ctxt, item.owner_id.to_def_id());
     match &item.kind {
         ItemKind::Fn(sig, generics, body_id) => {
+
             check_item_fn(
                 ctxt,
                 &mut vir.functions,
@@ -104,17 +189,7 @@ fn check_item<'tcx>(
             // get from the HIR data.
 
             if vattrs.is_external(&ctxt.cmd_line_args) {
-                if vattrs.external_type_specification {
-                    return err_span(
-                        item.span,
-                        "a type cannot be marked both `external_type_specification` and `external`",
-                    );
-                }
-
-                let def_id = id.owner_id.to_def_id();
-                let path = def_id_to_vir_path(ctxt.tcx, &ctxt.verus_items, def_id);
-                vir.external_types.push(path);
-
+                // already handled by `check_item_early`
                 return Ok(());
             }
 
@@ -722,6 +797,23 @@ pub fn crate_to_vir<'tcx>(ctxt: &mut Context<'tcx>) -> Result<Krate, VirErr> {
         let arch_word_bits = ctxt.arch_word_bits.unwrap_or(vir::ast::ArchWordBits::Either32Or64);
         ctxt.arch_word_bits = Some(arch_word_bits);
         vir.arch.word_bits = arch_word_bits;
+    }
+    for owner in ctxt.krate.owners.iter() {
+        if let MaybeOwner::Owner(owner) = owner {
+            match owner.node() {
+                OwnerNode::Item(item) => {
+                    // If the item does not belong to a module, use the def_id of its owner as the
+                    // module path
+                    let mpath = item_to_module.get(&item.item_id());
+                    if let Some(None) = mpath {
+                        // whole module is external, so skip the item
+                        continue;
+                    }
+                    check_item_early(ctxt, &mut vir, mpath, &item.item_id(), item)?
+                }
+                _ => (),
+            }
+        }
     }
     for owner in ctxt.krate.owners.iter() {
         if let MaybeOwner::Owner(owner) = owner {
