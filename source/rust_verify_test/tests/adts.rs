@@ -1362,14 +1362,66 @@ test_verify_one_file! {
     } => Err(err) => assert_fails(err, 2)
 }
 
-test_verify_one_file! {
-    #[test] matches_syntax_precedence_4 verus_code! {
+fn matches_syntax_context(expr: &str) -> String {
+    r#"
+    builtin_macros::verus! {
         enum E { A, B }
         proof fn test1() {
-            // TODO support this?
-            assert(false && E::A matches E::A ==> true);
+            assert("#
+        .to_string()
+        + expr
+        + r#");
         }
-    } => Err(err) => assert_vir_error_msg(err, "matches using ==> is currently not allowed on the right-hand-side of && and || (use parentheses)")
+    }
+    "#
+}
+
+macro_rules! test_matches_syntax_err {
+    ($(#[$attrs:meta])* $name:ident with $code:tt $msg:expr) => {
+        test_verify_one_file! {
+            $(#[$attrs])* $name matches_syntax_context(code_str! { $code })
+            => Err(err) => assert_vir_error_msg(err, $msg)
+        }
+    }
+}
+
+test_matches_syntax_err! {
+    #[test] matches_syntax_precedence_4a with (false && E::A matches E::A ==> true)
+    "matches with ==> is currently not allowed on the right-hand-side of most binary operators (use parentheses)"
+}
+
+test_matches_syntax_err! {
+    #[test] matches_syntax_precedence_4b with (false || E::A matches E::A ==> true)
+    "matches with ==> is currently not allowed on the right-hand-side of most binary operators (use parentheses)"
+}
+
+test_matches_syntax_err! {
+    #[test] matches_syntax_precedence_5 with (false == E::A matches E::A && true)
+    "matches with && is currently not allowed on the right-hand-side of most binary operators (use parentheses)"
+}
+
+test_matches_syntax_err! {
+    #[test] matches_syntax_precedence_6 with (false <==> E::A matches E::A ==> true)
+    "matches with ==> is currently not allowed on the right-hand-side of most binary operators (use parentheses)"
+}
+
+test_matches_syntax_err! {
+    #[test] matches_syntax_precedence_nonsensical_1 with (3 < E::A matches E::A ==> true)
+    "matches with ==> is currently not allowed on the right-hand-side of most binary operators (use parentheses)"
+}
+
+test_matches_syntax_err! {
+    #[test] matches_syntax_precedence_nonsensical_2 with (3 >> E::A matches E::A ==> true)
+    "matches with ==> is currently not allowed on the right-hand-side of most binary operators (use parentheses)"
+}
+
+test_verify_one_file! {
+    #[test] matches_syntax_precedence_10 verus_code! {
+        enum E { A, B }
+        proof fn test1() {
+            assert(E::A matches E::B && false ==> false);
+        }
+    } => Ok(())
 }
 
 test_verify_one_file! {
