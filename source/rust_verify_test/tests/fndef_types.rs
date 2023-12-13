@@ -308,6 +308,27 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] proof_fn_error2 verus_code! {
+        proof fn foo() -> bool { true }
+
+        spec fn test() -> bool {
+            call_requires(foo, ())
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cannot use a function as a value unless it as mode 'exec'")
+}
+
+test_verify_one_file! {
+    #[test] external_fn_error verus_code! {
+        #[verifier::external]
+        fn foo() -> bool { true }
+
+        spec fn test() -> bool {
+            call_requires(foo, ())
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cannot call function marked `external`")
+}
+
+test_verify_one_file! {
     #[test] mut_params_error verus_code! {
         fn stuff(x: &mut u8) { }
 
@@ -583,6 +604,17 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] recursion16_via_const verus_code! {
+        spec const x: bool = call_requires(f, (0,));
+
+        fn f(y: u8)
+            requires (y == 0) != x,
+        {
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cyclic dependency in the requires/ensures of this function")
+}
+
+test_verify_one_file! {
     #[test] test_function_takes_trait_bound verus_code! {
         trait Tr {
             spec fn foo(&self) -> bool;
@@ -600,5 +632,55 @@ test_verify_one_file! {
         proof fn test(x: X) {
             assert(call_requires(stuff::<X>, (x,)) <== x.foo());
         }
+
+        proof fn test2<T: Tr>(t: T) {
+            assert(call_requires(stuff::<T>, (t,)) <== t.foo());
+        }
     } => Ok(())
+}
+
+test_verify_one_file! {
+    #[test] test_by_compute verus_code! {
+        fn stuff(x: u8)
+            requires x == 0,
+        { }
+
+        proof fn test2() {
+            assert(call_requires(stuff, (0,)) == true) by(compute);
+        }
+
+        proof fn test() {
+            // TODO support this
+            assert(call_requires(stuff, (0,)) == true) by(compute_only); // FAILS
+        }
+    } => Err(err) => assert_fails(err, 1)
+}
+
+test_verify_one_file! {
+    #[test] test_requires_ensures_off_trail_func verus_code! {
+        trait Tr {
+            fn stuff(&self, x: u8) -> (b: bool)
+                requires x <= 5,
+                ensures (b == (x == 0));
+        }
+
+        struct X { }
+
+        impl Tr for X {
+            fn stuff(&self, x: u8) -> (b: bool)
+            {
+                x == 0
+            }
+        }
+
+        proof fn test_req(x: X) {
+            assert(call_requires(<X as Tr>::stuff, (&x, 0)));
+            assert(call_requires(<X as Tr>::stuff, (&x, 20))); // FAILS
+        }
+
+        proof fn test_ens(x: X) {
+            assert(!call_ensures(<X as Tr>::stuff, (&x, 0), false));
+            assert(!call_ensures(<X as Tr>::stuff, (&x, 0), true)); // FAILS
+        }
+    } => Err(err) => assert_fails(err, 2)
 }
