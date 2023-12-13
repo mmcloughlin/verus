@@ -115,7 +115,7 @@ fn check_well_founded_typ(
             // and rely on type_graph to reject any cycles
             true
         }
-        TypX::FnDef(_path, _type_args) => {
+        TypX::FnDef(_path, _type_args, _impl_paths) => {
             // I don't think there's any way to refer to explicitly refer to these types in
             // Rust code, so it shouldn't be possible to use on in a struct definition
             // or anything.
@@ -228,7 +228,7 @@ fn check_positive_uses(
             }
             Ok(())
         }
-        TypX::FnDef(_path, _type_args) => {
+        TypX::FnDef(_path, _type_args, _impl_paths) => {
             panic!("FnDef type is not expected in struct definitions");
         }
         TypX::Boxed(t) => check_positive_uses(global, local, polarity, t),

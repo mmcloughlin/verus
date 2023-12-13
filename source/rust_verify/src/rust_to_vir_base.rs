@@ -622,7 +622,10 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
             let typ_args = typ_args.into_iter().map(|(t, _)| t).collect();
             let path = def_id_to_vir_path(tcx, verus_items, *def_id);
             let fun = Arc::new(vir::ast::FunX { path });
-            let typx = TypX::FnDef(fun, Arc::new(typ_args));
+
+            let impl_paths = get_impl_paths(tcx, verus_items, param_env_src, *def_id, args);
+
+            let typx = TypX::FnDef(fun, Arc::new(typ_args), impl_paths);
             (Arc::new(typx), false)
         }
         TyKind::Char => (Arc::new(TypX::Char), false),

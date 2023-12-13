@@ -132,7 +132,7 @@ pub(crate) fn typ_to_air(ctx: &Ctx, typ: &Typ) -> air::ast::Typ {
             }
         }
         TypX::Decorate(_, t) => typ_to_air(ctx, t),
-        TypX::FnDef(fun, _) => ident_typ(&path_to_air_ident(&crate::def::prefix_fndef_type(fun))),
+        TypX::FnDef(fun, _, _) => ident_typ(&path_to_air_ident(&crate::def::prefix_fndef_type(fun))),
         TypX::Boxed(_) => str_typ(POLY),
         TypX::TypParam(_) => str_typ(POLY),
         TypX::Primitive(Primitive::Array | Primitive::Slice, _) => match typ_as_mono(typ) {
@@ -249,7 +249,7 @@ pub fn typ_to_ids(typ: &Typ) -> Vec<Expr> {
         TypX::AnonymousClosure(..) => {
             panic!("internal error: AnonymousClosure should have been removed by ast_simplify")
         }
-        TypX::FnDef(fun, typs) => mk_id(fndef_id(fun, typs)),
+        TypX::FnDef(fun, typs, _) => mk_id(fndef_id(fun, typs)),
         TypX::Datatype(path, typs, _) => mk_id(datatype_id(path, typs)),
         TypX::Primitive(name, typs) => mk_id(primitive_id(&name, typs)),
         TypX::Decorate(d, typ) if crate::context::DECORATE => {
@@ -422,7 +422,7 @@ fn try_box(ctx: &Ctx, expr: Expr, typ: &Typ) -> Option<Expr> {
             }
         }
         TypX::Primitive(_, _) => prefix_typ_as_mono(prefix_box, typ, "primitive type"),
-        TypX::FnDef(fun, _) => Some(crate::def::prefix_fndef_box(fun)),
+        TypX::FnDef(fun, _, _) => Some(crate::def::prefix_fndef_box(fun)),
         TypX::Decorate(_, t) => return try_box(ctx, expr, t),
         TypX::Boxed(_) => None,
         TypX::TypParam(_) => None,
@@ -452,7 +452,7 @@ fn try_unbox(ctx: &Ctx, expr: Expr, typ: &Typ) -> Option<Expr> {
             }
         }
         TypX::Primitive(_, _) => prefix_typ_as_mono(prefix_unbox, typ, "primitive type"),
-        TypX::FnDef(fun, _) => Some(crate::def::prefix_fndef_box(fun)),
+        TypX::FnDef(fun, _, _) => Some(crate::def::prefix_fndef_box(fun)),
         TypX::Tuple(_) => None,
         TypX::Lambda(typs, _) => Some(prefix_unbox(&prefix_lambda_type(typs.len()))),
         TypX::AnonymousClosure(..) => unimplemented!(),

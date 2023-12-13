@@ -535,7 +535,7 @@ pub(crate) fn expand_call_graph(
                         // `T: FnWithSpecification` for some type T
                         let typ = crate::ast_util::undecorate_typ(&typs[0]);
                         match &*typ {
-                            TypX::FnDef(fun, _typs) => {
+                            TypX::FnDef(fun, _typs, _impl_paths) => {
                                 // Here, `T = FnDef(fun)`    (fun is an exec-mode function)
                                 // Such a trait bound could be represented by a dictionary with the requires/ensures of func
                                 // Therefore, we just point to the node representing the requires/ensures of func

@@ -161,7 +161,7 @@ pub enum TypX {
     AnonymousClosure(Typs, Typ, usize),
     /// Corresponds to Rust's FnDef type
     /// Typs are generic type args
-    FnDef(Fun, Typs),
+    FnDef(Fun, Typs, ImplPaths),
     /// Datatype (concrete or abstract) applied to type arguments
     Datatype(Path, Typs, ImplPaths),
     /// Wrap type with extra information relevant to Rust but usually irrelevant to SMT encoding

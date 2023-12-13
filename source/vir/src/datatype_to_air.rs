@@ -703,7 +703,7 @@ pub fn datatypes_and_primitives_to_air(ctx: &Ctx, datatypes: &crate::ast::Dataty
             &dpath,
             &str_typ(&path_to_air_ident(&dpath)),
             None,
-            Some(Arc::new(TypX::FnDef(fun.clone(), typ_args))),
+            Some(Arc::new(TypX::FnDef(fun.clone(), typ_args, Arc::new(vec![])))),
             tparams,
             &variants,
             false,

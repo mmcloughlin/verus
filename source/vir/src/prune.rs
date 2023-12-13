@@ -201,7 +201,7 @@ fn reach_typ(ctxt: &Ctxt, state: &mut State, typ: &Typ) {
             reach_assoc_type_decl(ctxt, state, &(trait_path.clone(), name.clone()));
             // let visitor handle self_typ, trait_typ_args
         }
-        TypX::FnDef(fun, _) => {
+        TypX::FnDef(fun, _, _) => {
             state.fndef_types.insert(fun.clone());
             reach_function(ctxt, state, fun);
         }

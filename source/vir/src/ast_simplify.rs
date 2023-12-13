@@ -571,7 +571,7 @@ fn simplify_one_typ(local: &LocalCtxt, state: &mut State, typ: &Typ) -> Result<T
             let path = state.closure_type_name(*id);
             Ok(Arc::new(TypX::Datatype(path, Arc::new(vec![]), Arc::new(vec![]))))
         }
-        TypX::FnDef(fun, _typs) => {
+        TypX::FnDef(fun, _typs, _impl_paths) => {
             state.fndef_typs.insert(fun.clone());
             Ok(typ.clone())
         }
@@ -814,7 +814,7 @@ fn add_fndef_axioms_to_function(
 
     let fndef_singleton = SpannedTyped::new(
         &function.span,
-        &Arc::new(TypX::FnDef(fun.clone(), typ_args)),
+        &Arc::new(TypX::FnDef(fun.clone(), typ_args, Arc::new(vec![]))),
         ExprX::ExecFnByName(fun.clone()),
     );
 

@@ -79,7 +79,7 @@ where
                         expr_visitor_control_flow!(typ_visitor_dfs(t, ft));
                     }
                 }
-                TypX::FnDef(_path, ts) => {
+                TypX::FnDef(_path, ts, _impl_paths) => {
                     for t in ts.iter() {
                         expr_visitor_control_flow!(typ_visitor_dfs(t, ft));
                     }
@@ -143,9 +143,9 @@ where
             let name = name.clone();
             ft(env, &Arc::new(TypX::Projection { trait_typ_args, trait_path, name }))
         }
-        TypX::FnDef(path, ts) => {
+        TypX::FnDef(path, ts, impl_paths) => {
             let ts = vec_map_result(&**ts, |t| map_typ_visitor_env(t, env, ft))?;
-            ft(env, &Arc::new(TypX::FnDef(path.clone(), Arc::new(ts))))
+            ft(env, &Arc::new(TypX::FnDef(path.clone(), Arc::new(ts), impl_paths.clone())))
         }
         TypX::Decorate(d, t) => {
             let t = map_typ_visitor_env(t, env, ft)?;
