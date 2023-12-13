@@ -393,6 +393,20 @@ test_verify_one_file! {
 
 test_verify_one_file! {
     #[test] recursion7_via_call_requires verus_code! {
+        spec fn foo<F: FnOnce<(u8,)>>(f: F) -> bool {
+            call_requires(f, (0,))
+        }
+
+        fn test(x: u8) -> bool
+            requires foo(test)
+        {
+            false
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cyclic dependency in the requires/ensures of this function")
+}
+
+test_verify_one_file! {
+    #[test] recursion8_via_call_requires verus_code! {
         spec fn foo<F: FnOnce(u8) -> bool>(f: F) -> bool {
             call_requires(f, (0,))
         }
@@ -402,13 +416,11 @@ test_verify_one_file! {
         {
             false
         }
-
-        // Not supported currently, but if it were, this would need to be a recursion error
-    } => Err(err) => assert_vir_error_msg(err, "Verus does yet not support this type of bound")
+    } => Err(err) => assert_vir_error_msg(err, "cyclic dependency in the requires/ensures of this function")
 }
 
 test_verify_one_file! {
-    #[test] recursion8_via_fn_once verus_code! {
+    #[test] recursion9_via_fn_once verus_code! {
         spec fn foo<F: FnOnce(u8)>(f: F) -> bool {
             call_requires(f, (0,))
         }
@@ -421,7 +433,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion9_via_fn verus_code! {
+    #[test] recursion10_via_fn verus_code! {
         spec fn foo<F: Fn(u8)>(f: F) -> bool {
             call_requires(f, (0,))
         }
@@ -434,7 +446,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion10_via_fn_mut verus_code! {
+    #[test] recursion11_via_fn_mut verus_code! {
         spec fn foo<F: FnMut(u8)>(f: F) -> bool {
             call_requires(f, (0,))
         }
@@ -447,7 +459,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion11_via_trait_impl_in_function_generics verus_code! {
+    #[test] recursion12_via_trait_impl_in_function_generics verus_code! {
         trait Tr {
             spec fn stuff(&self) -> bool;
         }
@@ -479,7 +491,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion12_via_trait_impl_in_function_generics verus_code! {
+    #[test] recursion13_via_trait_impl_in_function_generics verus_code! {
         trait Tr {
             spec fn stuff(&self) -> bool;
         }
@@ -509,7 +521,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion13_via_fn_with_requires_ensures verus_code! {
+    #[test] recursion14_via_fn_with_requires_ensures verus_code! {
         use vstd::prelude::*;
 
         spec fn foo<F: FnWithRequiresEnsures<(u8,), ()>>(f: F) -> bool {
@@ -524,7 +536,7 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion14_via_fn_with_requires_ensures verus_code! {
+    #[test] recursion15_via_fn_with_requires_ensures verus_code! {
         use vstd::prelude::*;
 
         spec fn foo<F: FnWithRequiresEnsures<(u8,), ()>>(f: F) -> bool {
@@ -535,13 +547,11 @@ test_verify_one_file! {
             requires foo(test)
         {
         }
-
-        // Not supported currently, but if it were, this would need to be a recursion error
-    } => Err(err) => assert_vir_error_msg(err, "Verus does yet not support this type of bound")
+    } => Err(err) => assert_vir_error_msg(err, "cyclic dependency in the requires/ensures of this function")
 }
 
 test_verify_one_file! {
-    #[test] recursion15_via_trait_impl_in_function_generics_fn_with_requires_ensures verus_code! {
+    #[test] recursion16_via_trait_impl_in_function_generics_fn_with_requires_ensures verus_code! {
         use vstd::prelude::*;
 
         trait Tr {
