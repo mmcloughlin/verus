@@ -37,7 +37,7 @@ use std::sync::Arc;
 use vir::ast::{
     ArithOp, ArmX, AutospecUsage, BinaryOp, BitwiseOp, CallTarget, Constant, ExprX, FieldOpr, FunX,
     HeaderExprX, InequalityOp, IntRange, InvAtomicity, Mode, PatternX, SpannedTyped, StmtX, Stmts,
-    Typ, TypX, UnaryOp, UnaryOpr, VirErr,
+    Typ, TypX, UnaryOp, UnaryOpr, VirErr, ImplPath,
 };
 use vir::ast_util::{ident_binder, typ_to_diagnostic_str, types_equal, undecorate_typ};
 use vir::def::positional_field_ident;
@@ -1766,7 +1766,8 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
                 Arc::new(fun),
                 typ_args,
                 // arbitrary impl_path
-                Arc::new(vec![vir::def::prefix_lambda_type(0)]),
+                // REVIEW: why is this needed?
+                Arc::new(vec![ImplPath::TraitImplPath(vir::def::prefix_lambda_type(0))]),
                 AutospecUsage::Final,
             );
             let args = Arc::new(vec![tgt_vir.clone(), idx_vir.clone()]);

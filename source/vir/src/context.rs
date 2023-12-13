@@ -1,6 +1,6 @@
 use crate::ast::{
     ArchWordBits, Datatype, Fun, Function, GenericBounds, Ident, IntRange, Krate, Mode, Path,
-    Primitive, Trait, TypX, Variants, VirErr,
+    Primitive, Trait, TypX, Variants, VirErr, ImplPath,
 };
 use crate::datatype_to_air::is_datatype_transparent;
 use crate::def::FUEL_ID;
@@ -253,7 +253,7 @@ impl GlobalCtx {
             // then test might fail because the broadcast_forall b for s isn't enabled
             // without S: View.  The programmer would have to provide some explicit ordering,
             // such as using s.view() in test so that test depends on S: View, to fix this.
-            func_call_graph.add_node(Node::TraitImpl(t.x.impl_path.clone()));
+            func_call_graph.add_node(Node::TraitImpl(ImplPath::TraitImplPath(t.x.impl_path.clone())));
         }
 
         for t in &krate.trait_impls {
@@ -262,8 +262,15 @@ impl GlobalCtx {
 
         for f in &krate.functions {
             fun_bounds.insert(f.x.name.clone(), f.x.typ_bounds.clone());
-            func_call_graph.add_node(Node::Fun(f.x.name.clone()));
-            func_call_graph.add_node(Node::Exec(f.x.name.clone()));
+            let fun_node = Node::Fun(f.x.name.clone());
+            let exec_node = Node::Exec(f.x.name.clone());
+            let fndef_impl_node = Node::TraitImpl(ImplPath::FnDefImplPath(f.x.name.clone()));
+            func_call_graph.add_node(fun_node.clone());
+            func_call_graph.add_node(exec_node);
+            func_call_graph.add_node(fndef_impl_node.clone());
+
+            func_call_graph.add_edge(fndef_impl_node, fun_node);
+
             crate::recursion::expand_call_graph(&func_map, &mut func_call_graph, f)?;
         }
 

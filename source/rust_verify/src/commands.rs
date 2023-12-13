@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use vir::ast::Visibility;
-use vir::ast::{Fun, Function, ItemKind, Krate, Mode, Path, TraitImpl, VirErr};
+use vir::ast::{Fun, Function, ItemKind, Krate, Mode, Path, TraitImpl, VirErr, ImplPath};
 use vir::ast_util::fun_as_friendly_rust_name;
 use vir::ast_util::is_visible_to;
 use vir::context::FunctionCtx;
@@ -169,7 +169,7 @@ impl<'a, D: Diagnostics> OpGenerator<'a, D> {
         // are only sound at the end of the SCC, after obligations have been satisfied:
         ops.extend(post_ops);
         for node in self.ctx.global.func_call_graph.get_scc_nodes(&scc_rep) {
-            if let Node::TraitImpl(impl_path) = node {
+            if let Node::TraitImpl(ImplPath::TraitImplPath(impl_path)) = node {
                 if let Some(imp) = self.trait_impl_map.get(&impl_path) {
                     let cmds = vir::traits::trait_impl_to_air(&self.ctx, imp);
                     ops.push(Op::context(ContextOp::TraitImpl, cmds, None));

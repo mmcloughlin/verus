@@ -17,7 +17,7 @@ use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
 use std::collections::HashMap;
 use std::sync::Arc;
-use vir::ast::{GenericBoundX, IntRange, Path, PathX, Primitive, Typ, TypX, Typs, VirErr};
+use vir::ast::{GenericBoundX, IntRange, Path, PathX, Primitive, Typ, TypX, Typs, VirErr, ImplPath};
 use vir::ast_util::{types_equal, undecorate_typ};
 use vir::def::unique_local_name;
 
@@ -247,7 +247,7 @@ pub(crate) fn get_impl_paths<'tcx>(
             if let Ok(impl_source) = candidate {
                 if let rustc_middle::traits::ImplSource::UserDefined(u) = impl_source {
                     let impl_path = def_id_to_vir_path(tcx, verus_items, u.impl_def_id);
-                    impl_paths.push(impl_path);
+                    impl_paths.push(ImplPath::TraitImplPath(impl_path));
 
                     let preds = tcx.predicates_of(u.impl_def_id);
                     for p in preds.instantiate(tcx, u.args).predicates {
@@ -261,6 +261,7 @@ pub(crate) fn get_impl_paths<'tcx>(
                     // REVIEW: need to see if there are other problematic cases here;
                     // I think codegen_select_candidate lacks some information because
                     // it's used for codegen
+
                     match inst_pred_erased.skip_binder() {
                         ClauseKind::Trait(TraitPredicate {
                             trait_ref: rustc_middle::ty::TraitRef {
@@ -274,6 +275,10 @@ pub(crate) fn get_impl_paths<'tcx>(
                             { 
                                 match trait_args.into_type_list(tcx)[0].kind() {
                                     TyKind::FnDef(fn_def_id, fn_node_substs) => {
+                                        let fn_path = def_id_to_vir_path(tcx, verus_items, *fn_def_id);
+                                        let fn_fun = Arc::new(vir::ast::FunX { path: fn_path });
+                                        impl_paths.push(ImplPath::FnDefImplPath(fn_fun));
+
                                         let preds = tcx.predicates_of(fn_def_id);
                                         for p in preds.instantiate(tcx, fn_node_substs).predicates {
                                             if !predicate_worklist.contains(&p) {

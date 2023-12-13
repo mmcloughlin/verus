@@ -1,7 +1,7 @@
 use crate::ast::{
-    AutospecUsage, BuiltinSpecFun, CallTarget, Constant, ExprX, Fun, Function,
+    AutospecUsage, CallTarget, Constant, ExprX, Fun, Function,
     FunctionKind, GenericBoundX, IntRange, MaskSpec, Mode, Path, SpannedTyped, Typ, TypX, Typs,
-    UnaryOpr, VirErr,
+    UnaryOpr, VirErr, ImplPath,
 };
 use crate::ast_to_sst::expr_to_exp_skip_checks;
 use crate::ast_util::typ_to_diagnostic_str;
@@ -36,7 +36,7 @@ pub enum Node {
     Exec(Fun),
     Datatype(Path),
     Trait(Path),
-    TraitImpl(Path),
+    TraitImpl(ImplPath),
 }
 
 #[derive(Clone)]
@@ -438,7 +438,7 @@ pub(crate) fn expand_call_graph(
     // Add D: T --> f and f --> T where f is one of D's methods that implements T
     if let FunctionKind::TraitMethodImpl { trait_path, impl_path, .. } = function.x.kind.clone() {
         let t_node = Node::Trait(trait_path.clone());
-        let impl_node = Node::TraitImpl(impl_path.clone());
+        let impl_node = Node::TraitImpl(ImplPath::TraitImplPath(impl_path.clone()));
         call_graph.add_edge(impl_node, f_node.clone());
         call_graph.add_edge(f_node.clone(), t_node);
     }
@@ -498,7 +498,7 @@ pub(crate) fn expand_call_graph(
                         FunctionKind::TraitMethodImpl { impl_path: callee_impl, .. },
                     ) = (&function.x.kind, &f2.x.kind)
                     {
-                        if caller_impl == impl_path && callee_impl == impl_path {
+                        if &ImplPath::TraitImplPath(caller_impl.clone()) == impl_path && &ImplPath::TraitImplPath(callee_impl.clone()) == impl_path {
                             continue;
                         }
                     }
@@ -515,58 +515,11 @@ pub(crate) fn expand_call_graph(
                     call_graph.add_edge(f_node.clone(), Node::Fun(callee.clone()))
                 }
             }
-            ExprX::Call(CallTarget::BuiltinSpecFun(bsf, typs, impl_paths), _)
+            ExprX::Call(CallTarget::BuiltinSpecFun(_bsf, _typs, impl_paths), _)
                 if !(fp == FunctionPlace::Internal && function.x.mode == Mode::Exec)
             => {
                 for impl_path in impl_paths.iter() {
                     call_graph.add_edge(f_node.clone(), Node::TraitImpl(impl_path.clone()));
-                }
-
-                match bsf {
-                    BuiltinSpecFun::StaticReq(_) | BuiltinSpecFun::StaticEns(_) => {
-                        // In principle, we could handle this like the FnDef case below.
-                        return Err(error(
-                            &expr.span,
-                            "Verus Internal Error: StaticReq and StaticEns shouldn't exist at this point",
-                        ));
-                    }
-                    BuiltinSpecFun::ClosureReq | BuiltinSpecFun::ClosureEns => {
-                        // This is effectively the trait bound
-                        // `T: FnWithSpecification` for some type T
-                        let typ = crate::ast_util::undecorate_typ(&typs[0]);
-                        match &*typ {
-                            TypX::FnDef(fun, _typs, _impl_paths) => {
-                                // Here, `T = FnDef(fun)`    (fun is an exec-mode function)
-                                // Such a trait bound could be represented by a dictionary with the requires/ensures of func
-                                // Therefore, we just point to the node representing the requires/ensures of func
-                                let callee = Node::Fun(fun.clone());
-                                call_graph.add_edge(f_node.clone(), callee);
-                            }
-                            TypX::TypParam(p) if p == &crate::def::trait_self_type_param() => {
-                                return Err(error(&expr.span, "unsupported use of Self type"));
-                            }
-                            TypX::TypParam(_p) => {
-                                // TODO check that 'p' has the desired bound
-                                /*
-                                let bound = function.x.typ_bounds.iter().find(|(q, _)| q == p);
-                                let bound = bound.expect("missing type parameter");
-                                let GenericBoundX::Traits(ts) = &*bound.1;
-                                assert!(ts.iter().any(|t| t == trait_path2));
-                                */
-                            }
-                            _ => {
-                                // I don't think this can happen with our current supported
-                                // feature set. Right now, besides FnDef, we only support
-                                // ClosureReq/ClosureEns for the 'anonymous closure' type.
-                                // But that can only happen in the body of an exec function, which
-                                // right now, we aren't traversing.
-                                return Err(error(
-                                    &expr.span,
-                                    "calling requires/ensures not supported here for this type",
-                                ));
-                            }
-                        }
-                    }
                 }
             }
             ExprX::Fuel(callee, fuel) if *fuel >= 1 => {

@@ -528,11 +528,20 @@ pub enum BuiltinSpecFun {
     StaticEns(Fun),
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, ToDebugSNode, PartialEq, Eq)]
+pub enum ImplPath {
+    /// the usual `impl X for Trait`. The 'Path' is to the 'impl' block
+    TraitImplPath(Path),
+    /// Declaration of a function `f` which conceptually implements a trait bound
+    /// `FnDef(f) : FnOnce`
+    FnDefImplPath(Fun),
+}
+
 /// Path of each impl that is used to satisfy a trait bound when instantiating the type parameter
 /// This is used to name the "dictionary" that is (conceptually) passed along with the
 /// type argument (see recursive_types.rs)
 // REVIEW: should trait_typ_args also have ImplPaths?
-pub type ImplPaths = Arc<Vec<Path>>;
+pub type ImplPaths = Arc<Vec<ImplPath>>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode)]
 pub enum CallTargetKind {

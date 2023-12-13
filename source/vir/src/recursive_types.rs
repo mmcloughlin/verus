@@ -1,6 +1,6 @@
 use crate::ast::{
     AcceptRecursiveType, Datatype, FunctionKind, GenericBound, GenericBoundX, Ident, Idents, Krate,
-    Path, Trait, Typ, TypX, VirErr,
+    Path, Trait, Typ, TypX, VirErr, ImplPath,
 };
 use crate::ast_util::path_as_friendly_rust_name;
 use crate::context::GlobalCtx;
@@ -133,7 +133,7 @@ fn check_well_founded_typ(
 // REVIEW: should we also have Trait(Path) here?
 pub(crate) enum TypNode {
     Datatype(Path),
-    TraitImpl(Path),
+    TraitImpl(ImplPath),
 }
 
 struct CheckPositiveGlobal {
@@ -281,7 +281,7 @@ pub(crate) fn build_datatype_graph(krate: &Krate) -> Graph<TypNode> {
     }
 
     for a in &krate.assoc_type_impls {
-        let src = TypNode::TraitImpl(a.x.impl_path.clone());
+        let src = TypNode::TraitImpl(ImplPath::TraitImplPath(a.x.impl_path.clone()));
         for impl_path in a.x.impl_paths.iter() {
             let dst = TypNode::TraitImpl(impl_path.clone());
             type_graph.add_edge(src.clone(), dst);
@@ -406,7 +406,7 @@ fn type_scc_error(krate: &Krate, head: &TypNode, nodes: &Vec<TypNode>) -> VirErr
                 }
             }
             TypNode::TraitImpl(impl_path) => {
-                if let Some(t) = krate.trait_impls.iter().find(|t| t.x.impl_path == *impl_path) {
+                if let Some(t) = krate.trait_impls.iter().find(|t| ImplPath::TraitImplPath(t.x.impl_path.clone()) == *impl_path) {
                     let span = t.span.clone();
                     push(node, span);
                 }
@@ -450,7 +450,7 @@ fn scc_error(krate: &Krate, head: &Node, nodes: &Vec<Node>) -> VirErr {
                 }
             }
             Node::TraitImpl(impl_path) => {
-                if let Some(t) = krate.trait_impls.iter().find(|t| t.x.impl_path == *impl_path) {
+                if let Some(t) = krate.trait_impls.iter().find(|t| ImplPath::TraitImplPath(t.x.impl_path.clone()) == *impl_path) {
                     let span = t.span.clone();
                     push(node, span);
                 }
@@ -511,9 +511,9 @@ pub(crate) fn add_trait_impl_to_graph(call_graph: &mut Graph<Node>, t: &crate::a
     //   impl T<t1...tn> for ... { ... }
     // Add necessary impl_T_for_* --> impl_Ui_for_* edges
     // This corresponds to instantiating the a: Dictionary_U<A> field in the comments below
-    let src_node = Node::TraitImpl(t.x.impl_path.clone());
+    let src_node = Node::TraitImpl(ImplPath::TraitImplPath(t.x.impl_path.clone()));
     for imp in t.x.trait_typ_arg_impls.iter() {
-        if &t.x.impl_path != imp {
+        if ImplPath::TraitImplPath(t.x.impl_path.clone()) != *imp {
             call_graph.add_edge(src_node.clone(), Node::TraitImpl(imp.clone()));
         }
     }
