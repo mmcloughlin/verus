@@ -255,6 +255,39 @@ pub(crate) fn get_impl_paths<'tcx>(
                             predicate_worklist.push(p);
                         }
                     }
+                } else if let rustc_middle::traits::ImplSource::Builtin(rustc_middle::traits::BuiltinImplSource::Misc, _) = impl_source {
+                    // When the needed trait bound is `FnDef(f) : FnOnce(...)`
+                    // The impl_source isn't useful.
+                    // REVIEW: need to see if there are other problematic cases here;
+                    // I think codegen_select_candidate lacks some information because
+                    // it's used for codegen
+                    match inst_pred_erased.skip_binder() {
+                        ClauseKind::Trait(TraitPredicate {
+                            trait_ref: rustc_middle::ty::TraitRef {
+                                def_id: trait_def_id, args: trait_args, ..
+                            },
+                            polarity: ImplPolarity::Positive,
+                        }) => {
+                            if Some(trait_def_id) == tcx.lang_items().fn_trait()
+                                    || Some(trait_def_id) == tcx.lang_items().fn_mut_trait()
+                                    || Some(trait_def_id) == tcx.lang_items().fn_once_trait()
+                            { 
+                                match trait_args.into_type_list(tcx)[0].kind() {
+                                    TyKind::FnDef(fn_def_id, fn_node_substs) => {
+                                        let preds = tcx.predicates_of(fn_def_id);
+                                        for p in preds.instantiate(tcx, fn_node_substs).predicates {
+                                            if !predicate_worklist.contains(&p) {
+                                                predicate_worklist.push(p);
+                                            }
+                                        }
+                                    }
+                                    _ => { }
+                                }
+                            }
+
+                        }
+                        _ => { }
+                    }
                 }
             }
         }
