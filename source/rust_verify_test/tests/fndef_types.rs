@@ -581,3 +581,24 @@ test_verify_one_file! {
         }
     } => Err(err) => assert_vir_error_msg(err, "self-reference in a trait definition")
 }
+
+test_verify_one_file! {
+    #[test] test_function_takes_trait_bound verus_code! {
+        trait Tr {
+            spec fn foo(&self) -> bool;
+        }
+
+        struct X { u: u64, }
+
+        impl Tr for X {
+            spec fn foo(&self) -> bool;
+        }
+
+        fn stuff<T: Tr>(t: T)
+            requires t.foo();
+
+        proof fn test(x: X) {
+            assert(call_requires(stuff::<X>, (x,)) <== x.foo());
+        }
+    } => Ok(())
+}
