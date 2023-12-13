@@ -36,8 +36,8 @@ use rustc_span::Span;
 use std::sync::Arc;
 use vir::ast::{
     ArithOp, ArmX, AutospecUsage, BinaryOp, BitwiseOp, CallTarget, Constant, ExprX, FieldOpr, FunX,
-    HeaderExprX, InequalityOp, IntRange, InvAtomicity, Mode, PatternX, SpannedTyped, StmtX, Stmts,
-    Typ, TypX, UnaryOp, UnaryOpr, VirErr, ImplPath,
+    HeaderExprX, ImplPath, InequalityOp, IntRange, InvAtomicity, Mode, PatternX, SpannedTyped,
+    StmtX, Stmts, Typ, TypX, UnaryOp, UnaryOpr, VirErr,
 };
 use vir::ast_util::{ident_binder, typ_to_diagnostic_str, types_equal, undecorate_typ};
 use vir::def::positional_field_ident;

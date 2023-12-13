@@ -565,28 +565,52 @@ where
         let _ = map.insert(p.x.name.clone(), ScopeEntry::new(&p.x.typ, p.x.is_mut, true));
     }
     for e in require.iter() {
-        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Signature, e, fp)));
+        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+            FunctionPlace::Signature,
+            e,
+            fp
+        )));
     }
     for e in ensure.iter() {
-        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Signature, e, fp)));
+        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+            FunctionPlace::Signature,
+            e,
+            fp
+        )));
     }
     for e in decrease.iter() {
-        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Signature, e, fp)));
+        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+            FunctionPlace::Signature,
+            e,
+            fp
+        )));
     }
     if let Some(e) = decrease_when {
-        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Signature, e, fp)));
+        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+            FunctionPlace::Signature,
+            e,
+            fp
+        )));
     }
     match mask_spec {
         MaskSpec::NoSpec => {}
         MaskSpec::InvariantOpens(es) | MaskSpec::InvariantOpensExcept(es) => {
             for e in es.iter() {
-                expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Signature, e, fp)));
+                expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+                    FunctionPlace::Signature,
+                    e,
+                    fp
+                )));
             }
         }
     }
 
     if let Some(e) = body {
-        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Internal, e, fp)));
+        expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+            FunctionPlace::Internal,
+            e,
+            fp
+        )));
     }
     map.pop_scope();
 
@@ -595,23 +619,28 @@ where
         for p in params.iter() {
             let _ = map.insert(p.x.name.clone(), ScopeEntry::new(&p.x.typ, p.x.is_mut, true));
         }
-        expr_visitor_control_flow!(expr_visitor_dfs(req_ens, map, &mut |e, fp| mf(FunctionPlace::Internal, e, fp)));
+        expr_visitor_control_flow!(expr_visitor_dfs(req_ens, map, &mut |e, fp| mf(
+            FunctionPlace::Internal,
+            e,
+            fp
+        )));
         map.pop_scope();
     }
 
     if let Some(es) = fndef_axioms {
         for e in es.iter() {
-            expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(FunctionPlace::Internal, e, fp)));
+            expr_visitor_control_flow!(expr_visitor_dfs(e, map, &mut |e, fp| mf(
+                FunctionPlace::Internal,
+                e,
+                fp
+            )));
         }
     }
 
     VisitorControlFlow::Recurse
 }
 
-pub(crate) fn function_visitor_check<E, MF>(
-    function: &Function,
-    mf: &mut MF,
-) -> Result<(), E>
+pub(crate) fn function_visitor_check<E, MF>(function: &Function, mf: &mut MF) -> Result<(), E>
 where
     MF: FnMut(FunctionPlace, &Expr) -> Result<(), E>,
 {
@@ -668,9 +697,11 @@ where
                         *autospec_usage,
                     )
                 }
-                CallTarget::BuiltinSpecFun(x, typs, impl_paths) => {
-                    CallTarget::BuiltinSpecFun(x.clone(), map_typs_visitor_env(typs, env, ft)?, impl_paths.clone())
-                }
+                CallTarget::BuiltinSpecFun(x, typs, impl_paths) => CallTarget::BuiltinSpecFun(
+                    x.clone(),
+                    map_typs_visitor_env(typs, env, ft)?,
+                    impl_paths.clone(),
+                ),
                 CallTarget::FnSpec(fun) => {
                     let fun = map_expr_visitor_env(fun, map, env, fe, fs, ft)?;
                     CallTarget::FnSpec(fun)

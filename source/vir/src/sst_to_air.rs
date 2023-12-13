@@ -132,7 +132,9 @@ pub(crate) fn typ_to_air(ctx: &Ctx, typ: &Typ) -> air::ast::Typ {
             }
         }
         TypX::Decorate(_, t) => typ_to_air(ctx, t),
-        TypX::FnDef(fun, _, _) => ident_typ(&path_to_air_ident(&crate::def::prefix_fndef_type(fun))),
+        TypX::FnDef(fun, _, _) => {
+            ident_typ(&path_to_air_ident(&crate::def::prefix_fndef_type(fun)))
+        }
         TypX::Boxed(_) => str_typ(POLY),
         TypX::TypParam(_) => str_typ(POLY),
         TypX::Primitive(Primitive::Array | Primitive::Slice, _) => match typ_as_mono(typ) {

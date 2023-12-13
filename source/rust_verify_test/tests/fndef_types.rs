@@ -407,7 +407,6 @@ test_verify_one_file! {
     } => Err(err) => assert_vir_error_msg(err, "Verus does yet not support this type of bound")
 }
 
-
 test_verify_one_file! {
     #[test] recursion8_via_fn_once verus_code! {
         spec fn foo<F: FnOnce(u8)>(f: F) -> bool {

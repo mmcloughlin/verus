@@ -369,7 +369,10 @@ fn check_one_expr(
             let typs = match &*expr.typ {
                 TypX::FnDef(_fun, typs, _impl_paths) => typs,
                 _ => {
-                    return Err(error(&expr.span, "internal Verus error: expected FnDef type here"));
+                    return Err(error(
+                        &expr.span,
+                        "internal Verus error: expected FnDef type here",
+                    ));
                 }
             };
             for typ in typs.iter() {

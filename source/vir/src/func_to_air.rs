@@ -757,7 +757,11 @@ pub fn func_axioms_to_air(
                     .expect("expected FnDef axioms to have been generated in ast_simplify");
                 for fndef_axiom in fndef_axioms.iter() {
                     let mut state = crate::ast_to_sst::State::new(diagnostics);
-                    let exp = crate::ast_to_sst::expr_to_pure_exp_skip_checks(ctx, &mut state, fndef_axiom)?;
+                    let exp = crate::ast_to_sst::expr_to_pure_exp_skip_checks(
+                        ctx,
+                        &mut state,
+                        fndef_axiom,
+                    )?;
                     let exp = state.finalize_exp(ctx, &new_fun_ssts, &exp)?;
                     state.finalize();
 

@@ -17,7 +17,9 @@ use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
 use std::collections::HashMap;
 use std::sync::Arc;
-use vir::ast::{GenericBoundX, IntRange, Path, PathX, Primitive, Typ, TypX, Typs, VirErr, ImplPath};
+use vir::ast::{
+    GenericBoundX, ImplPath, IntRange, Path, PathX, Primitive, Typ, TypX, Typs, VirErr,
+};
 use vir::ast_util::{types_equal, undecorate_typ};
 use vir::def::unique_local_name;
 
@@ -255,7 +257,11 @@ pub(crate) fn get_impl_paths<'tcx>(
                             predicate_worklist.push(p);
                         }
                     }
-                } else if let rustc_middle::traits::ImplSource::Builtin(rustc_middle::traits::BuiltinImplSource::Misc, _) = impl_source {
+                } else if let rustc_middle::traits::ImplSource::Builtin(
+                    rustc_middle::traits::BuiltinImplSource::Misc,
+                    _,
+                ) = impl_source
+                {
                     // When the needed trait bound is `FnDef(f) : FnOnce(...)`
                     // The impl_source isn't useful.
                     // REVIEW: need to see if there are other problematic cases here;
@@ -264,18 +270,22 @@ pub(crate) fn get_impl_paths<'tcx>(
 
                     match inst_pred_erased.skip_binder() {
                         ClauseKind::Trait(TraitPredicate {
-                            trait_ref: rustc_middle::ty::TraitRef {
-                                def_id: trait_def_id, args: trait_args, ..
-                            },
+                            trait_ref:
+                                rustc_middle::ty::TraitRef {
+                                    def_id: trait_def_id,
+                                    args: trait_args,
+                                    ..
+                                },
                             polarity: ImplPolarity::Positive,
                         }) => {
                             if Some(trait_def_id) == tcx.lang_items().fn_trait()
-                                    || Some(trait_def_id) == tcx.lang_items().fn_mut_trait()
-                                    || Some(trait_def_id) == tcx.lang_items().fn_once_trait()
-                            { 
+                                || Some(trait_def_id) == tcx.lang_items().fn_mut_trait()
+                                || Some(trait_def_id) == tcx.lang_items().fn_once_trait()
+                            {
                                 match trait_args.into_type_list(tcx)[0].kind() {
                                     TyKind::FnDef(fn_def_id, fn_node_substs) => {
-                                        let fn_path = def_id_to_vir_path(tcx, verus_items, *fn_def_id);
+                                        let fn_path =
+                                            def_id_to_vir_path(tcx, verus_items, *fn_def_id);
                                         let fn_fun = Arc::new(vir::ast::FunX { path: fn_path });
                                         impl_paths.push(ImplPath::FnDefImplPath(fn_fun));
 
@@ -286,12 +296,11 @@ pub(crate) fn get_impl_paths<'tcx>(
                                             }
                                         }
                                     }
-                                    _ => { }
+                                    _ => {}
                                 }
                             }
-
                         }
-                        _ => { }
+                        _ => {}
                     }
                 }
             }

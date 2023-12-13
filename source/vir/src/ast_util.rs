@@ -84,7 +84,9 @@ pub fn types_equal(typ1: &Typ, typ2: &Typ) -> bool {
         (TypX::Air(a1), TypX::Air(a2)) => a1 == a2,
         (TypX::StrSlice, TypX::StrSlice) => true,
         (TypX::Char, TypX::Char) => true,
-        (TypX::FnDef(f1, ts1, _impl_paths), TypX::FnDef(f2, ts2, _impl_paths2)) => f1 == f2 && n_types_equal(ts1, ts2),
+        (TypX::FnDef(f1, ts1, _impl_paths), TypX::FnDef(f2, ts2, _impl_paths2)) => {
+            f1 == f2 && n_types_equal(ts1, ts2)
+        }
         // rather than matching on _, repeat all the cases to catch any new variants added to TypX:
         (TypX::Bool, _) => false,
         (TypX::Int(_), _) => false,

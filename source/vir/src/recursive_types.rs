@@ -1,6 +1,6 @@
 use crate::ast::{
-    AcceptRecursiveType, Datatype, FunctionKind, GenericBound, GenericBoundX, Ident, Idents, Krate,
-    Path, Trait, Typ, TypX, VirErr, ImplPath,
+    AcceptRecursiveType, Datatype, FunctionKind, GenericBound, GenericBoundX, Ident, Idents,
+    ImplPath, Krate, Path, Trait, Typ, TypX, VirErr,
 };
 use crate::ast_util::path_as_friendly_rust_name;
 use crate::context::GlobalCtx;
@@ -406,7 +406,11 @@ fn type_scc_error(krate: &Krate, head: &TypNode, nodes: &Vec<TypNode>) -> VirErr
                 }
             }
             TypNode::TraitImpl(impl_path) => {
-                if let Some(t) = krate.trait_impls.iter().find(|t| ImplPath::TraitImplPath(t.x.impl_path.clone()) == *impl_path) {
+                if let Some(t) = krate
+                    .trait_impls
+                    .iter()
+                    .find(|t| ImplPath::TraitImplPath(t.x.impl_path.clone()) == *impl_path)
+                {
                     let span = t.span.clone();
                     push(node, span);
                 }
@@ -450,7 +454,11 @@ fn scc_error(krate: &Krate, head: &Node, nodes: &Vec<Node>) -> VirErr {
                 }
             }
             Node::TraitImpl(impl_path) => {
-                if let Some(t) = krate.trait_impls.iter().find(|t| ImplPath::TraitImplPath(t.x.impl_path.clone()) == *impl_path) {
+                if let Some(t) = krate
+                    .trait_impls
+                    .iter()
+                    .find(|t| ImplPath::TraitImplPath(t.x.impl_path.clone()) == *impl_path)
+                {
                     let span = t.span.clone();
                     push(node, span);
                 }

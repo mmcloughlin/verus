@@ -1,6 +1,6 @@
 use crate::ast::{
-    ArchWordBits, Datatype, Fun, Function, GenericBounds, Ident, IntRange, Krate, Mode, Path,
-    Primitive, Trait, TypX, Variants, VirErr, ImplPath,
+    ArchWordBits, Datatype, Fun, Function, GenericBounds, Ident, ImplPath, IntRange, Krate, Mode,
+    Path, Primitive, Trait, TypX, Variants, VirErr,
 };
 use crate::datatype_to_air::is_datatype_transparent;
 use crate::def::FUEL_ID;
@@ -253,7 +253,8 @@ impl GlobalCtx {
             // then test might fail because the broadcast_forall b for s isn't enabled
             // without S: View.  The programmer would have to provide some explicit ordering,
             // such as using s.view() in test so that test depends on S: View, to fix this.
-            func_call_graph.add_node(Node::TraitImpl(ImplPath::TraitImplPath(t.x.impl_path.clone())));
+            func_call_graph
+                .add_node(Node::TraitImpl(ImplPath::TraitImplPath(t.x.impl_path.clone())));
         }
 
         for t in &krate.trait_impls {
@@ -294,13 +295,14 @@ impl GlobalCtx {
             if f.x.attrs.atomic {
                 let exec_node = Node::Exec(f.x.name.clone());
                 if func_call_graph.node_is_in_cycle(&exec_node) {
-                    return Err(error(&f.span,
-                        "'atomic' cannot be used on a recursive function"));
+                    return Err(error(&f.span, "'atomic' cannot be used on a recursive function"));
                 }
             }
             if f.x.mode == Mode::Exec && func_call_graph.node_is_in_cycle(&f_node) {
-                return Err(error(&f.span,
-                    "cyclic dependency in the requires/ensures of this function"));
+                return Err(error(
+                    &f.span,
+                    "cyclic dependency in the requires/ensures of this function",
+                ));
             }
         }
         let qid_map = RefCell::new(HashMap::new());

@@ -1,7 +1,6 @@
 use crate::ast::{
-    AutospecUsage, CallTarget, Constant, ExprX, Fun, Function,
-    FunctionKind, GenericBoundX, IntRange, MaskSpec, Mode, Path, SpannedTyped, Typ, TypX, Typs,
-    UnaryOpr, VirErr, ImplPath,
+    AutospecUsage, CallTarget, Constant, ExprX, Fun, Function, FunctionKind, GenericBoundX,
+    ImplPath, IntRange, MaskSpec, Mode, Path, SpannedTyped, Typ, TypX, Typs, UnaryOpr, VirErr,
 };
 use crate::ast_to_sst::expr_to_exp_skip_checks;
 use crate::ast_util::typ_to_diagnostic_str;
@@ -498,7 +497,9 @@ pub(crate) fn expand_call_graph(
                         FunctionKind::TraitMethodImpl { impl_path: callee_impl, .. },
                     ) = (&function.x.kind, &f2.x.kind)
                     {
-                        if &ImplPath::TraitImplPath(caller_impl.clone()) == impl_path && &ImplPath::TraitImplPath(callee_impl.clone()) == impl_path {
+                        if &ImplPath::TraitImplPath(caller_impl.clone()) == impl_path
+                            && &ImplPath::TraitImplPath(callee_impl.clone()) == impl_path
+                        {
                             continue;
                         }
                     }
@@ -516,8 +517,8 @@ pub(crate) fn expand_call_graph(
                 }
             }
             ExprX::Call(CallTarget::BuiltinSpecFun(_bsf, _typs, impl_paths), _)
-                if !(fp == FunctionPlace::Internal && function.x.mode == Mode::Exec)
-            => {
+                if !(fp == FunctionPlace::Internal && function.x.mode == Mode::Exec) =>
+            {
                 for impl_path in impl_paths.iter() {
                     call_graph.add_edge(f_node.clone(), Node::TraitImpl(impl_path.clone()));
                 }

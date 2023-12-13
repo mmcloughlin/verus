@@ -29,7 +29,7 @@ use vir::def::trait_self_type_param;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use vir::ast::{Fun, FunX, FunctionKind, Krate, KrateX, Path, Typ, VirErr, ImplPath};
+use vir::ast::{Fun, FunX, FunctionKind, ImplPath, Krate, KrateX, Path, Typ, VirErr};
 
 fn check_item<'tcx>(
     ctxt: &Context<'tcx>,

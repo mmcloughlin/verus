@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use vir::ast::Visibility;
-use vir::ast::{Fun, Function, ItemKind, Krate, Mode, Path, TraitImpl, VirErr, ImplPath};
+use vir::ast::{Fun, Function, ImplPath, ItemKind, Krate, Mode, Path, TraitImpl, VirErr};
 use vir::ast_util::fun_as_friendly_rust_name;
 use vir::ast_util::is_visible_to;
 use vir::context::FunctionCtx;
