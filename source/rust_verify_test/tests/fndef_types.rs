@@ -476,7 +476,7 @@ test_verify_one_file! {
         fn test<T: Tr>(x: u8)
         {
         }
-    } => Err(err) => assert_vir_error_msg(err, "recursive trait declaration")
+    } => Err(err) => assert_vir_error_msg(err, "self-reference in a trait definition")
 }
 
 test_verify_one_file! {
@@ -506,7 +506,7 @@ test_verify_one_file! {
         fn test<T: Tr>(x: u8)
         {
         }
-    } => Err(err) => assert_vir_error_msg(err, "recursive trait declaration")
+    } => Err(err) => assert_vir_error_msg(err, "self-reference in a trait definition")
 }
 
 test_verify_one_file! {
@@ -563,12 +563,12 @@ test_verify_one_file! {
             // depends on the bound `X: Tr`
             // which depends on the above trait impl
             // which in turn depends on `alpaca`
-            (test::<X>).requires(test::<X>, (0,), ())
+            (test::<X>).requires((0,))
         }
 
         // The definition of `test` itself is fine
         fn test<T: Tr>(x: u8)
         {
         }
-    } => Err(err) => assert_vir_error_msg(err, "recursive trait declaration")
+    } => Err(err) => assert_vir_error_msg(err, "self-reference in a trait definition")
 }
