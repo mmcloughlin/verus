@@ -378,27 +378,29 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
-    #[test] recursion6_via_fn_with_specification verus_code! {
-        spec fn foo<F: FnWithSpecification<(u8,)>>(f: F) -> bool {
+    #[test] recursion6_via_call_requires verus_code! {
+        spec fn foo<F: FnOnce(u8) -> bool>(f: F) -> bool {
             call_requires(f, (0,))
         }
 
-        fn test(x: u8)
+        fn test(x: u8) -> bool
             requires foo(test)
         {
+            false
         }
     } => Err(err) => assert_vir_error_msg(err, "cyclic dependency in the requires/ensures of this function")
 }
 
 test_verify_one_file! {
-    #[test] recursion7_via_fn_with_specification verus_code! {
-        spec fn foo<F: FnWithSpecification<(u8,), Output=()>>(f: F) -> bool {
+    #[test] recursion7_via_call_requires verus_code! {
+        spec fn foo<F: FnOnce(u8) -> bool>(f: F) -> bool {
             call_requires(f, (0,))
         }
 
-        fn test(x: u8)
+        fn test(x: u8) -> bool
             requires foo(test)
         {
+            false
         }
 
         // Not supported currently, but if it were, this would need to be a recursion error
@@ -498,6 +500,70 @@ test_verify_one_file! {
             // which depends on the above trait impl
             // which in turn depends on `alpaca`
             call_ensures(test::<X>, (0,), ())
+        }
+
+        // The definition of `test` itself is fine
+        fn test<T: Tr>(x: u8)
+        {
+        }
+    } => Err(err) => assert_vir_error_msg(err, "recursive trait declaration")
+}
+
+test_verify_one_file! {
+    #[test] recursion13_via_fn_with_requires_ensures verus_code! {
+        use vstd::prelude::*;
+
+        spec fn foo<F: FnWithRequiresEnsures<(u8,), ()>>(f: F) -> bool {
+            f.requires((0,))
+        }
+
+        fn test(x: u8)
+            requires foo(test)
+        {
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cyclic dependency in the requires/ensures of this function")
+}
+
+test_verify_one_file! {
+    #[test] recursion14_via_fn_with_requires_ensures verus_code! {
+        use vstd::prelude::*;
+
+        spec fn foo<F: FnWithRequiresEnsures<(u8,), ()>>(f: F) -> bool {
+            f.requires((0,))
+        }
+
+        fn test(x: u8)
+            requires foo(test)
+        {
+        }
+
+        // Not supported currently, but if it were, this would need to be a recursion error
+    } => Err(err) => assert_vir_error_msg(err, "Verus does yet not support this type of bound")
+}
+
+test_verify_one_file! {
+    #[test] recursion15_via_trait_impl_in_function_generics_fn_with_requires_ensures verus_code! {
+        use vstd::prelude::*;
+
+        trait Tr {
+            spec fn stuff(&self) -> bool;
+        }
+
+        struct X { }
+
+        impl Tr for X
+        {
+            // cyclic dependency with alpaca
+            spec fn stuff(&self) -> bool {
+                alpaca()
+            }
+        }
+
+        spec fn alpaca() -> bool {
+            // depends on the bound `X: Tr`
+            // which depends on the above trait impl
+            // which in turn depends on `alpaca`
+            (test::<X>).requires(test::<X>, (0,), ())
         }
 
         // The definition of `test` itself is fine
