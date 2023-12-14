@@ -298,6 +298,7 @@ pub(crate) fn check_termination_commands(
         &Arc::new(vec![]),
         &Arc::new(vec![]),
         &Arc::new(vec![]),
+        &Arc::new(vec![]),
         &MaskSpec::NoSpec,
         function.x.mode,
         &stm_block,
