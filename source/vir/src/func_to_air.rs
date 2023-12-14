@@ -1,5 +1,5 @@
 use crate::ast::{
-    Fun, FunX, Function, FunctionKind, Ident, Idents, ItemKind, Mode, Param, ParamX, Params,
+    Fun, Function, FunctionKind, Ident, Idents, ItemKind, Mode, Param, ParamX, Params,
     SpannedTyped, Typ, TypX, Typs, VirErr,
 };
 use crate::ast_util::QUANT_FORALL;
@@ -537,11 +537,9 @@ pub fn func_decl_to_air(
     function: &Function,
 ) -> Result<Commands, VirErr> {
     let (is_trait_method_impl, inherit_fn_ens) = match &function.x.kind {
-        FunctionKind::TraitMethodImpl { trait_path, trait_typ_args, .. } => {
-            let inherit_from_path = trait_path.push_segment(function.x.name.path.last_segment());
-            let inherit_from_fun = Arc::new(FunX { path: inherit_from_path });
-            if ctx.funcs_with_ensure_predicate.contains(&inherit_from_fun) {
-                let ens = prefix_ensures(&fun_to_air_ident(&inherit_from_fun));
+        FunctionKind::TraitMethodImpl { method, trait_typ_args, .. } => {
+            if ctx.funcs_with_ensure_predicate.contains(method) {
+                let ens = prefix_ensures(&fun_to_air_ident(&method));
                 (true, Some((ens, trait_typ_args.clone())))
             } else {
                 (true, None)
