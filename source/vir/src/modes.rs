@@ -325,7 +325,7 @@ fn get_var_loc_mode(
             *to_mode
         }
         ExprX::UnaryOpr(
-            UnaryOpr::Field(FieldOpr { datatype, variant: _, field, get_variant }),
+            UnaryOpr::Field(FieldOpr { datatype, variant: _, field, get_variant, check: _ }),
             rcvr,
         ) => {
             let rcvr_mode =
@@ -411,6 +411,13 @@ fn check_expr_handle_mut_arg(
             }
 
             let x_mode = typing.get(x).1;
+
+            if typing.check_ghost_blocks
+                && typing.block_ghostness == Ghost::Exec
+                && matches!(&expr.x, ExprX::VarAt(..))
+            {
+                return Err(error(&expr.span, &format!("cannot use `old` in exec-code")));
+            }
 
             if typing.check_ghost_blocks
                 && typing.block_ghostness == Ghost::Exec
@@ -637,7 +644,7 @@ fn check_expr_handle_mut_arg(
             return check_expr_handle_mut_arg(typing, outer_mode, e1);
         }
         ExprX::UnaryOpr(
-            UnaryOpr::Field(FieldOpr { datatype, variant, field, get_variant }),
+            UnaryOpr::Field(FieldOpr { datatype, variant, field, get_variant, check: _ }),
             e1,
         ) => {
             if *get_variant && typing.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
@@ -647,7 +654,8 @@ fn check_expr_handle_mut_arg(
             let datatype = &typing.datatypes[datatype];
             let field = get_field(&datatype.x.get_variant(variant).a, field);
             let field_mode = field.a.1;
-            let mode_read = mode_join(e1_mode_read, field_mode);
+            let mode_read =
+                if *get_variant { Mode::Spec } else { mode_join(e1_mode_read, field_mode) };
             if let Some(e1_mode_write) = e1_mode_write {
                 return Ok((mode_read, Some(mode_join(e1_mode_write, field_mode))));
             } else {

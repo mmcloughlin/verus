@@ -266,36 +266,24 @@ pub(crate) fn coerce_expr_to_native(ctx: &Ctx, expr: &Expr) -> Expr {
 }
 
 pub fn coerce_expr_to_poly(ctx: &Ctx, expr: &Expr) -> Expr {
-    match &*crate::ast_util::undecorate_typ(&expr.typ) {
-        TypX::Datatype(path, _, _)
-            if !ctx.datatype_is_transparent[path] && typ_as_mono(&expr.typ).is_none() =>
-        {
-            expr.clone()
-        }
-        TypX::Primitive(_, _) if typ_as_mono(&expr.typ).is_none() => expr.clone(),
-        TypX::Bool
-        | TypX::Int(_)
-        | TypX::Lambda(..)
-        | TypX::Datatype(..)
-        | TypX::Primitive(_, _)
-        | TypX::StrSlice
-        | TypX::Char => {
-            let op = UnaryOpr::Box(expr.typ.clone());
-            let exprx = ExprX::UnaryOpr(op, expr.clone());
-            let typ = Arc::new(TypX::Boxed(expr.typ.clone()));
-            SpannedTyped::new(&expr.span, &typ, exprx)
-        }
-        TypX::AnonymousClosure(..) => {
-            panic!("internal error: AnonymousClosure should be removed by ast_simplify")
-        }
-        TypX::Tuple(_) => panic!("internal error: Tuple should be removed by ast_simplify"),
-        TypX::Decorate(..) => {
-            panic!("internal error: Decorate should be removed by undecorate_typ")
-        }
-        TypX::Boxed(_) | TypX::TypParam(_) | TypX::Projection { .. } => expr.clone(),
-        TypX::TypeId => panic!("internal error: TypeId created too soon"),
-        TypX::ConstInt(_) => panic!("internal error: expression should not have ConstInt type"),
-        TypX::Air(_) => panic!("internal error: Air type created too soon"),
+    if typ_is_poly(ctx, &expr.typ) {
+        expr.clone()
+    } else {
+        let op = UnaryOpr::Box(expr.typ.clone());
+        let exprx = ExprX::UnaryOpr(op, expr.clone());
+        let typ = Arc::new(TypX::Boxed(expr.typ.clone()));
+        SpannedTyped::new(&expr.span, &typ, exprx)
+    }
+}
+
+pub(crate) fn coerce_exp_to_poly(ctx: &Ctx, exp: &crate::sst::Exp) -> crate::sst::Exp {
+    if typ_is_poly(ctx, &exp.typ) {
+        exp.clone()
+    } else {
+        let op = UnaryOpr::Box(exp.typ.clone());
+        let expx = crate::sst::ExpX::UnaryOpr(op, exp.clone());
+        let typ = Arc::new(TypX::Boxed(exp.typ.clone()));
+        SpannedTyped::new(&exp.span, &typ, expx)
     }
 }
 
@@ -434,7 +422,13 @@ fn poly_expr(ctx: &Ctx, state: &mut State, expr: &Expr) -> Expr {
                     let exprx = ExprX::UnaryOpr(op.clone(), e1.clone());
                     SpannedTyped::new(&e1.span, &e1.typ, exprx)
                 }
-                UnaryOpr::Field(FieldOpr { datatype, variant, field, get_variant: _ }) => {
+                UnaryOpr::Field(FieldOpr {
+                    datatype,
+                    variant,
+                    field,
+                    get_variant: _,
+                    check: _,
+                }) => {
                     let fields = &ctx.datatype_map[datatype].x.get_variant(variant).a;
                     let field = crate::ast_util::get_field(fields, field);
 
