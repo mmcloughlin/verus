@@ -155,7 +155,7 @@ where
         VisitorControlFlow::Recurse => {
             match &stm.x {
                 StmX::Call { .. }
-                | StmX::Assert(_, _)
+                | StmX::Assert(_, _, _)
                 | StmX::Assume(_)
                 | StmX::Assign { .. }
                 | StmX::AssertBitVector { .. }
@@ -221,12 +221,13 @@ where
                 args,
                 split: _,
                 dest: _,
+                assert_id: _,
             } => {
                 for exp in args.iter() {
                     expr_visitor_control_flow!(exp_visitor_dfs(exp, &mut ScopeMap::new(), f));
                 }
             }
-            StmX::Assert(_span2, exp) => {
+            StmX::Assert(_assert_id, _span2, exp) => {
                 expr_visitor_control_flow!(exp_visitor_dfs(exp, &mut ScopeMap::new(), f))
             }
             StmX::AssertBitVector { requires, ensures } => {
@@ -246,8 +247,8 @@ where
                 expr_visitor_control_flow!(exp_visitor_dfs(rhs, &mut ScopeMap::new(), f))
             }
             StmX::Fuel(..) | StmX::DeadEnd(..) | StmX::RevealString(_) => (),
-            StmX::Return { base_error: _, ret_exp: None, inside_body: _ } => {}
-            StmX::Return { base_error: _, ret_exp: Some(exp), inside_body: _ } => {
+            StmX::Return { base_error: _, ret_exp: None, inside_body: _, assert_id: _ } => {}
+            StmX::Return { base_error: _, ret_exp: Some(exp), inside_body: _, assert_id: _ } => {
                 expr_visitor_control_flow!(exp_visitor_dfs(exp, &mut ScopeMap::new(), f))
             }
             StmX::BreakOrContinue { label: _, is_break: _ } => (),
@@ -599,7 +600,7 @@ where
 {
     match &stm.x {
         StmX::Call { .. } => fs(stm),
-        StmX::Assert(_, _) => fs(stm),
+        StmX::Assert(_, _, _) => fs(stm),
         StmX::Assume(_) => fs(stm),
         StmX::Assign { .. } => fs(stm),
         StmX::AssertBitVector { .. } => fs(stm),
@@ -675,6 +676,95 @@ where
     }
 }
 
+/// map_stm_visitor with some idiosyncracies that are specific to
+/// the needs of expand_errors
+///
+/// Only maps over nodes with the 'assert_id'
+/// F: FnMut(stm: &Stm, previous_stm: Option<&Stm>) -> Result<Stm, VirErr>
+/// The second argument, previous_stm, is the directly previous Stm in the block, if it exists
+pub(crate) fn map_stm_visitor_for_assert_id_nodes<F>(stm: &Stm, fs: &mut F) -> Result<Stm, VirErr>
+where
+    F: FnMut(&Stm, Option<&Stm>) -> Result<Stm, VirErr>,
+{
+    match &stm.x {
+        StmX::Call { .. } => fs(stm, None),
+        StmX::Assert(_, _, _) => fs(stm, None),
+        StmX::Return { .. } => fs(stm, None),
+
+        StmX::Block(ss) => {
+            let mut stms: Vec<Stm> = Vec::new();
+            for (i, s) in ss.iter().enumerate() {
+                if matches!(&s.x, StmX::Call { .. } | StmX::Assert(..) | StmX::Return { .. }) {
+                    let prev = if i == 0 { None } else { Some(&ss[i - 1]) };
+                    stms.push(fs(&s, prev)?);
+                } else {
+                    stms.push(map_stm_visitor_for_assert_id_nodes(s, fs)?);
+                }
+            }
+            Ok(Spanned::new(stm.span.clone(), StmX::Block(Arc::new(stms))))
+        }
+
+        StmX::Assume(_) => Ok(stm.clone()),
+        StmX::Assign { .. } => Ok(stm.clone()),
+        StmX::AssertBitVector { .. } => Ok(stm.clone()),
+        StmX::Fuel(..) => Ok(stm.clone()),
+        StmX::RevealString(_) => Ok(stm.clone()),
+        StmX::DeadEnd(s) => {
+            let s = map_stm_visitor_for_assert_id_nodes(s, fs)?;
+            Ok(Spanned::new(stm.span.clone(), StmX::DeadEnd(s)))
+        }
+        StmX::BreakOrContinue { label: _, is_break: _ } => Ok(stm.clone()),
+        StmX::ClosureInner { body, typ_inv_vars } => {
+            let body = map_stm_visitor_for_assert_id_nodes(body, fs)?;
+            Ok(Spanned::new(
+                stm.span.clone(),
+                StmX::ClosureInner { body, typ_inv_vars: typ_inv_vars.clone() },
+            ))
+        }
+        StmX::If(cond, lhs, rhs) => {
+            let lhs = map_stm_visitor_for_assert_id_nodes(lhs, fs)?;
+            let rhs =
+                rhs.as_ref().map(|rhs| map_stm_visitor_for_assert_id_nodes(rhs, fs)).transpose()?;
+            Ok(Spanned::new(stm.span.clone(), StmX::If(cond.clone(), lhs, rhs)))
+        }
+        StmX::Loop { label, cond, body, invs, typ_inv_vars, modified_vars, is_for_loop } => {
+            let cond = if let Some((cond_stm, cond_exp)) = cond {
+                let cond_stm = map_stm_visitor_for_assert_id_nodes(cond_stm, fs)?;
+                Some((cond_stm, cond_exp.clone()))
+            } else {
+                None
+            };
+            let body = map_stm_visitor_for_assert_id_nodes(body, fs)?;
+            Ok(Spanned::new(
+                stm.span.clone(),
+                StmX::Loop {
+                    label: label.clone(),
+                    cond,
+                    body,
+                    invs: invs.clone(),
+                    typ_inv_vars: typ_inv_vars.clone(),
+                    modified_vars: modified_vars.clone(),
+                    is_for_loop: *is_for_loop,
+                },
+            ))
+        }
+        StmX::AssertQuery { mode, typ_inv_vars, body } => {
+            let body = map_stm_visitor_for_assert_id_nodes(body, fs)?;
+            Ok(Spanned::new(
+                stm.span.clone(),
+                StmX::AssertQuery { mode: *mode, typ_inv_vars: typ_inv_vars.clone(), body },
+            ))
+        }
+        StmX::OpenInvariant(inv, ident, ty, body, atomicity) => {
+            let body = map_stm_visitor_for_assert_id_nodes(body, fs)?;
+            Ok(Spanned::new(
+                stm.span.clone(),
+                StmX::OpenInvariant(inv.clone(), ident.clone(), ty.clone(), body, *atomicity),
+            ))
+        }
+    }
+}
+
 // non-recursive visitor
 pub(crate) fn map_shallow_stm<F>(stm: &Stm, fs: &mut F) -> Result<Stm, VirErr>
 where
@@ -682,7 +772,7 @@ where
 {
     match &stm.x {
         StmX::Call { .. } => Ok(stm.clone()),
-        StmX::Assert(_, _) => Ok(stm.clone()),
+        StmX::Assert(_, _, _) => Ok(stm.clone()),
         StmX::Assume(_) => Ok(stm.clone()),
         StmX::Assign { .. } => Ok(stm.clone()),
         StmX::AssertBitVector { .. } => Ok(stm.clone()),
@@ -757,18 +847,18 @@ where
     F: Fn(&Typ) -> Result<Typ, VirErr>,
 {
     match &stm.x {
-        StmX::Assert(_, _)
+        StmX::Assert(_, _, _)
         | StmX::AssertBitVector { requires: _, ensures: _ }
         | StmX::Assume(_)
         | StmX::Assign { lhs: _, rhs: _ }
         | StmX::Fuel(_, _)
         | StmX::RevealString(_)
         | StmX::DeadEnd(_)
-        | StmX::Return { base_error: _, ret_exp: _, inside_body: _ }
+        | StmX::Return { base_error: _, ret_exp: _, inside_body: _, assert_id: _ }
         | StmX::BreakOrContinue { label: _, is_break: _ }
         | StmX::If(_, _, _)
         | StmX::Block(_) => Ok(stm.clone()),
-        StmX::Call { fun, resolved_method, mode, typ_args, args, split, dest } => {
+        StmX::Call { fun, resolved_method, mode, typ_args, args, split, dest, assert_id } => {
             let typ_args = typ_args.iter().map(ft).collect::<Result<Vec<Typ>, _>>()?;
             let resolved_method = if let Some((f, ts)) = resolved_method {
                 Some((f.clone(), Arc::new(vec_map_result(ts, ft)?)))
@@ -785,6 +875,7 @@ where
                     args: args.clone(),
                     split: split.clone(),
                     dest: dest.clone(),
+                    assert_id: assert_id.clone(),
                 },
             ))
         }
@@ -847,7 +938,7 @@ where
     map_stm_visitor(stm, &mut |stm| {
         let span = stm.span.clone();
         let stm = match &stm.x {
-            StmX::Call { fun, resolved_method, mode, typ_args, args, split, dest } => {
+            StmX::Call { fun, resolved_method, mode, typ_args, args, split, dest, assert_id } => {
                 let args = Arc::new(vec_map_result(args, fe)?);
                 Spanned::new(
                     span,
@@ -859,10 +950,13 @@ where
                         args,
                         split: split.clone(),
                         dest: (*dest).clone(),
+                        assert_id: assert_id.clone(),
                     },
                 )
             }
-            StmX::Assert(span2, exp) => Spanned::new(span, StmX::Assert(span2.clone(), fe(exp)?)),
+            StmX::Assert(assert_id, span2, exp) => {
+                Spanned::new(span, StmX::Assert(assert_id.clone(), span2.clone(), fe(exp)?))
+            }
             StmX::AssertBitVector { requires, ensures } => {
                 let requires = Arc::new(vec_map_result(requires, fe)?);
                 let ensures = Arc::new(vec_map_result(ensures, fe)?);
@@ -878,16 +972,21 @@ where
             StmX::Fuel(..) => stm.clone(),
             StmX::RevealString(_) => stm.clone(),
             StmX::DeadEnd(..) => stm.clone(),
-            StmX::Return { base_error, ret_exp: None, inside_body } => {
+            StmX::Return { base_error, ret_exp: None, inside_body, assert_id } => {
                 let base_error = base_error.clone();
                 let inside_body = *inside_body;
-                Spanned::new(span, StmX::Return { base_error, ret_exp: None, inside_body })
+                let assert_id = assert_id.clone();
+                Spanned::new(
+                    span,
+                    StmX::Return { base_error, ret_exp: None, inside_body, assert_id },
+                )
             }
-            StmX::Return { base_error, ret_exp: Some(exp), inside_body } => {
+            StmX::Return { base_error, ret_exp: Some(exp), inside_body, assert_id } => {
                 let base_error = base_error.clone();
                 let ret_exp = Some(fe(exp)?);
                 let inside_body = *inside_body;
-                Spanned::new(span, StmX::Return { base_error, ret_exp, inside_body })
+                let assert_id = assert_id.clone();
+                Spanned::new(span, StmX::Return { base_error, ret_exp, inside_body, assert_id })
             }
             StmX::BreakOrContinue { label: _, is_break: _ } => stm.clone(),
             StmX::ClosureInner { .. } => stm.clone(),
