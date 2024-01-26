@@ -598,7 +598,7 @@ impl<X> Spanned<X> {
         Arc::new(Spanned { span: span, x: x })
     }
 
-    pub fn new_x<X2>(&self, x: X2) -> Arc<Spanned<X2>> {
+    pub fn new_x(&self, x: X) -> Arc<Spanned<X>> {
         Arc::new(Spanned { span: self.span.clone(), x })
     }
 
@@ -781,5 +781,12 @@ pub fn array_index_path(vstd_crate_name: &Option<Ident>) -> Path {
             Arc::new("array".to_string()),
             Arc::new("array_index".to_string()),
         ]),
+    })
+}
+
+pub(crate) fn option_type_path() -> Path {
+    Arc::new(PathX {
+        krate: Some(Arc::new("core".to_string())),
+        segments: Arc::new(vec![Arc::new("option".to_string()), Arc::new("Option".to_string())]),
     })
 }
