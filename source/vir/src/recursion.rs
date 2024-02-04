@@ -473,12 +473,15 @@ pub(crate) fn expand_call_graph(
         match &expr.x {
             ExprX::Call(CallTarget::Fun(kind, x, ts, impl_paths, autospec), _) => {
                 assert!(*autospec == AutospecUsage::Final);
-                let (callee, ts) =
-                    if let CallTargetKind::Method(Some((x_resolved, ts_resolved, _))) = kind {
-                        (x_resolved.clone(), ts_resolved.clone())
+                let (callee, ts, impl_paths) =
+                    if let CallTargetKind::Method(Some((x_resolved, ts_resolved, x_impl_paths))) =
+                        kind
+                    {
+                        (x_resolved.clone(), ts_resolved.clone(), x_impl_paths)
                     } else {
-                        (x.clone(), ts.clone())
+                        (x.clone(), ts.clone(), impl_paths)
                     };
+
                 let callee = {
                     let f2 = &func_map[&callee];
                     if let (
