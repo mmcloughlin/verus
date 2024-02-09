@@ -1135,6 +1135,19 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
                 );
             }
         }
+        Adjust::Pointer(PointerCoercion::MutToConstPointer) => {
+            let mut new_expr: Arc<SpannedTyped<vir::ast::ExprX>> = expr_to_vir_with_adjustments(
+                bctx,
+                expr,
+                ExprModifier::REGULAR,
+                adjustments,
+                adjustment_idx - 1,
+            )?;
+            let typ =
+                Arc::new(TypX::Decorate(vir::ast::TypDecoration::ConstPtr, new_expr.typ.clone()));
+            Arc::make_mut(&mut new_expr).typ = typ;
+            Ok(new_expr)
+        }
         Adjust::Pointer(_cast) => {
             unsupported_err!(expr.span, "casting a pointer (here the cast is implicit)")
         }
@@ -1465,7 +1478,12 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
             }
         },
         ExprKind::Cast(source, _) => {
-            let source_vir = &expr_to_vir(bctx, source, modifier)?;
+            let source_vir = expr_to_vir(bctx, source, modifier)?;
+
+            if is_simple_ptr_cast(bctx.types.expr_ty_adjusted(source), bctx.types.expr_ty(expr)) {
+                return Ok(source_vir);
+            }
+
             let source_ty = &source_vir.typ;
             let to_ty = expr_typ()?;
             match (&*undecorate_typ(source_ty), &*undecorate_typ(&to_ty)) {
@@ -1480,7 +1498,10 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
                 _ => {
                     return err_span(
                         expr.span,
-                        "Verus currently only supports casts from integer types and `char` to integer types",
+                        format!(
+                            "Verus does not support this cast: `{:?}` to `{:?}`",
+                            source_ty, to_ty
+                        ),
                     );
                 }
             }
@@ -2470,5 +2491,22 @@ pub(crate) fn closure_to_vir<'tcx>(
         Ok(bctx.spanned_typed_new(closure_expr.span, &closure_vir_typ, exprx))
     } else {
         panic!("closure_to_vir expects ExprKind::Closure");
+    }
+}
+
+fn is_simple_ptr_cast<'tcx>(
+    src: rustc_middle::ty::Ty<'tcx>,
+    dst: rustc_middle::ty::Ty<'tcx>,
+) -> bool {
+    match (src.kind(), dst.kind()) {
+        (
+            TyKind::RawPtr(rustc_middle::ty::TypeAndMut { ty: ty1, mutbl: _ }),
+            TyKind::RawPtr(rustc_middle::ty::TypeAndMut { ty: ty2, mutbl: _ }),
+        ) => {
+            // TODO lots of casts between types should also be fine
+            // The main thing to look out for is fat pointers
+            ty1 == ty2
+        }
+        _ => false,
     }
 }

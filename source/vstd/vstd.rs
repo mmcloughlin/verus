@@ -11,6 +11,7 @@
 #![cfg_attr(verus_keep_ghost, feature(core_intrinsics))]
 #![cfg_attr(verus_keep_ghost, feature(allocator_api))]
 #![cfg_attr(verus_keep_ghost, feature(step_trait))]
+#![cfg_attr(verus_keep_ghost, feature(ptr_metadata))]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -45,6 +46,7 @@ pub mod string;
 #[cfg(feature = "std")]
 pub mod thread;
 pub mod view;
+pub mod raw_ptr;
 
 pub mod relations;
 #[cfg(verus_keep_ghost)]
