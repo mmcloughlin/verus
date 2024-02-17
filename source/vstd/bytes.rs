@@ -40,6 +40,7 @@ pub proof fn lemma_auto_spec_u16_to_from_le_bytes()
     forall |s: Seq<u8>|
       s.len() == 2 ==> #[trigger] spec_u16_to_le_bytes(spec_u16_from_le_bytes(s)) == s,
 {
+  reveal(seq_axioms);
   assert forall |x: u16|  {
     &&& #[trigger] spec_u16_to_le_bytes(x).len() == 2
     &&& spec_u16_from_le_bytes(spec_u16_to_le_bytes(x)) == x
@@ -125,6 +126,7 @@ pub proof fn lemma_auto_spec_u32_to_from_le_bytes()
     forall |s: Seq<u8>|
       s.len() == 4 ==> #[trigger] spec_u32_to_le_bytes(spec_u32_from_le_bytes(s)) == s,
 {
+  reveal(seq_axioms);
   assert forall |x: u32|  {
     &&& #[trigger] spec_u32_to_le_bytes(x).len() == 4
     &&& spec_u32_from_le_bytes(spec_u32_to_le_bytes(x)) == x
@@ -215,6 +217,7 @@ pub closed spec fn spec_u64_from_le_bytes(s: Seq<u8>) -> u64
   (s[7] as u64) << 56
 }
 
+#[verifier::spinoff_prover]
 pub proof fn lemma_auto_spec_u64_to_from_le_bytes()
   ensures
     forall |x: u64|
@@ -227,6 +230,7 @@ pub proof fn lemma_auto_spec_u64_to_from_le_bytes()
       #![trigger spec_u64_to_le_bytes(spec_u64_from_le_bytes(s))]
       s.len() == 8 ==> spec_u64_to_le_bytes(spec_u64_from_le_bytes(s)) == s,
 {
+  reveal(seq_axioms);
   assert forall |x: u64|  {
     &&& #[trigger] spec_u64_to_le_bytes(x).len() == 8
     &&& spec_u64_from_le_bytes(spec_u64_to_le_bytes(x)) == x
@@ -360,6 +364,7 @@ pub proof fn lemma_auto_spec_u128_to_from_le_bytes()
     forall |s: Seq<u8>|
       s.len() == 16 ==> #[trigger] spec_u128_to_le_bytes(spec_u128_from_le_bytes(s)) == s,
 {
+  reveal(seq_axioms);
   assert forall |x: u128|  {
     &&& #[trigger] spec_u128_to_le_bytes(x).len() == 16
     &&& spec_u128_from_le_bytes(spec_u128_to_le_bytes(x)) == x
