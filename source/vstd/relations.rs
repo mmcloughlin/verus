@@ -127,6 +127,7 @@ verus! {
         ensures
             sorted_by(seq![x].add(s), less_than),
     {
+        reveal(seq_axioms);
         if s.len() > 1
         {
             assert forall |index: int| 0 < index < s.len() implies #[trigger] less_than(x, s[index]) by {

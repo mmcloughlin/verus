@@ -57,3 +57,10 @@ pub mod relations;
 // Re-exports all vstd types, traits, and functions that are commonly used or replace
 // regular `core` or `std` definitions.
 pub mod prelude;
+
+use prelude::*;
+reveal_group! {
+#[verifier::revealed_by_default_when_this_crate_is_imported]
+pub vstd_axioms =>
+    seq::seq_axioms,
+}
