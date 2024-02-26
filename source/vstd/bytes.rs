@@ -127,6 +127,7 @@ pub proof fn lemma_auto_spec_u32_to_from_le_bytes()
     forall |s: Seq<u8>|
       s.len() == 4 ==> #[trigger] spec_u32_to_le_bytes(spec_u32_from_le_bytes(s)) == s,
 {
+  reveal(crate::map::map_axioms);
   assert forall |x: u32|  {
     &&& #[trigger] spec_u32_to_le_bytes(x).len() == 4
     &&& spec_u32_from_le_bytes(spec_u32_to_le_bytes(x)) == x

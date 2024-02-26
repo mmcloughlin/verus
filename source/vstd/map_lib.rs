@@ -7,9 +7,11 @@ use crate::pervasive::*;
 use crate::set::*;
 #[cfg(verus_keep_ghost)]
 use crate::set_lib::*;
-use crate::map::Map;
+use crate::map::{Map, map_axioms};
 
 verus! {
+    
+reveal map_axioms;
 
 impl<K, V> Map<K, V> {
     

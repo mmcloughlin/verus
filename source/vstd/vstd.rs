@@ -63,4 +63,5 @@ reveal_group! {
 #[verifier::revealed_by_default_when_this_crate_is_imported]
 pub vstd_axioms =>
     seq::seq_axioms,
+    map::map_axioms,
 }
