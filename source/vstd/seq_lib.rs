@@ -17,6 +17,8 @@ use crate::relations::*;
 
 verus! {
 
+reveal seq_axioms;
+
 impl<A> Seq<A> {
     /// Applies the function `f` to each element of the sequence, and returns
     /// the resulting sequence.
@@ -79,7 +81,6 @@ impl<A> Seq<A> {
             total_ordering(leq),
         decreases
             self.len(),
-        via Self::sort_by_decreases
     {
         if self.len() <=1 {
             self
@@ -93,7 +94,6 @@ impl<A> Seq<A> {
             merge_sorted_with(left_sorted, right_sorted, leq)
         }
     }
-    #[verifier::decreases_by] proof fn sort_by_decreases(self, leq: spec_fn(A, A) -> bool) { reveal(seq_axioms); }
 
     pub proof fn lemma_sort_by_ensures(self, leq: spec_fn(A,A) -> bool)
         requires
@@ -105,7 +105,6 @@ impl<A> Seq<A> {
         decreases
             self.len(),
     {
-        reveal(seq_axioms);
         if self.len() <=1 {}
         else {
             let split_index = self.len() /2;
@@ -148,7 +147,6 @@ impl<A> Seq<A> {
     #[verifier::opaque]
     pub open spec fn filter(self, pred: spec_fn(A) -> bool) -> Self
         decreases self.len()
-        via Self::filter_decreases
     {
         if self.len() == 0 {
             self
@@ -157,7 +155,6 @@ impl<A> Seq<A> {
             if pred(self.last()) { subseq.push(self.last()) } else { subseq }
         }
     }
-    #[verifier::decreases_by] proof fn filter_decreases(self, pred: spec_fn(A) -> bool) { reveal(seq_axioms); }
 
     pub proof fn filter_lemma(self, pred: spec_fn(A) -> bool)
         ensures
@@ -175,7 +172,6 @@ impl<A> Seq<A> {
             self.filter(pred).len() <= self.len(),
         decreases self.len()
     {
-        reveal(seq_axioms);
         reveal(Seq::filter);
         let out = self.filter(pred);
         if 0 < self.len() {
@@ -214,7 +210,6 @@ impl<A> Seq<A> {
         (a+b).filter(pred) == a.filter(pred) + b.filter(pred),
     decreases b.len()
     {
-        reveal(seq_axioms);
         reveal(Seq::filter);
         if 0 < b.len()
         {
@@ -236,7 +231,6 @@ impl<A> Seq<A> {
         ensures
             a + b == b,
     {
-        reveal(seq_axioms);
         assert(a + b =~= b);
     }
 
@@ -247,7 +241,6 @@ impl<A> Seq<A> {
         ensures
             a + b == a,
     {
-        reveal(seq_axioms);
         assert(a + b =~= a);
     }
 
@@ -256,7 +249,6 @@ impl<A> Seq<A> {
         ensures
             (a + b).push(elt) == a + b.push(elt),
     {
-        reveal(seq_axioms);
         assert((a + b).push(elt) =~= a + b.push(elt));
     }
 
@@ -277,7 +269,6 @@ impl<A> Seq<A> {
     pub open spec fn max_via(self, leq: spec_fn(A,A) -> bool) -> A
        recommends self.len() > 0,
        decreases self.len(),
-       via Self::max_via_decreases
     {
         if self.len() > 1 {
             if leq(self[0],self.subrange(1,self.len() as int).max_via(leq)) {
@@ -289,13 +280,11 @@ impl<A> Seq<A> {
             self[0]
         }
     }
-    #[verifier::decreases_by] proof fn max_via_decreases(self, leq: spec_fn(A, A) -> bool) { reveal(seq_axioms); }
 
     /// Returns the minimum value in a non-empty sequence, given sorting function leq
     pub open spec fn min_via(self, leq: spec_fn(A,A) -> bool) -> A
        recommends self.len() > 0,
        decreases self.len(),
-       via Self::min_via_decreases
     {
         if self.len() > 1 {
             let subseq = self.subrange(1,self.len() as int);
@@ -309,7 +298,6 @@ impl<A> Seq<A> {
             self[0]
         }
     }
-    #[verifier::decreases_by] proof fn min_via_decreases(self, leq: spec_fn(A, A) -> bool) { reveal(seq_axioms); }
 
     // TODO is_sorted -- extract from summer_school e22
     pub open spec fn contains(self, needle: A) -> bool {
@@ -337,7 +325,6 @@ impl<A> Seq<A> {
     spec fn first_index_helper(self, needle: A) -> int
         recommends self.contains(needle),
         decreases self.len(),
-        via Self::first_index_helper_decreases
     {   
         if self.len() <= 0 {
             -1 //arbitrary, will never get to this case
@@ -347,7 +334,6 @@ impl<A> Seq<A> {
             1 + self.subrange(1,self.len() as int).first_index_helper(needle)
         }
     }
-    #[verifier::decreases_by] proof fn first_index_helper_decreases(self, needle: A) { reveal(seq_axioms); }
 
     pub proof fn index_of_first_ensures(self, needle: A)
         ensures
@@ -365,7 +351,6 @@ impl<A> Seq<A> {
         decreases
             self.len(),
     {
-        reveal(seq_axioms);
         if self.contains(needle) {
             let index = self.index_of_first(needle).unwrap();
             if self.len() <= 0 {} 
@@ -391,7 +376,6 @@ impl<A> Seq<A> {
     spec fn last_index_helper(self, needle: A) -> int
         recommends self.contains(needle),
         decreases self.len(),
-        via Self::last_index_helper_decreases
     {  
         if self.len() <= 0 {
             -1 //arbitrary, will never get to this case
@@ -403,7 +387,6 @@ impl<A> Seq<A> {
             self.drop_last().last_index_helper(needle)
         }
     }
-    #[verifier::decreases_by] proof fn last_index_helper_decreases(self, needle: A) { reveal(seq_axioms); }
 
     pub proof fn index_of_last_ensures(self, needle: A)
         ensures
@@ -421,7 +404,6 @@ impl<A> Seq<A> {
         decreases
             self.len(),
         {
-            reveal(seq_axioms);
             if self.contains(needle) {
                 let index = self.index_of_last(needle).unwrap();
                 if self.len() <= 0 {} 
@@ -451,7 +433,6 @@ impl<A> Seq<A> {
     ensures
         (a+b).drop_last() == a+b.drop_last(),
     {
-        reveal(seq_axioms);
         assert_seqs_equal!((a+b).drop_last(), a+b.drop_last());
     }
 
@@ -480,7 +461,6 @@ impl<A> Seq<A> {
     /// Converts a sequence into a multiset
     pub closed spec fn to_multiset(self) -> Multiset<A> 
         decreases self.len()
-        via Self::to_multiset_decreases
     {
         if self.len() == 0 {
             Multiset::<A>::empty()
@@ -488,7 +468,6 @@ impl<A> Seq<A> {
             Multiset::<A>::empty().insert(self.first()).add(self.drop_first().to_multiset())
         }
     }
-    #[verifier::decreases_by] proof fn to_multiset_decreases(self) { reveal(seq_axioms); }
 
     /// Proof of function to_multiset() correctness
     pub proof fn to_multiset_ensures(self)
@@ -497,7 +476,6 @@ impl<A> Seq<A> {
             self.len() == self.to_multiset().len(),
             forall |a: A| self.contains(a) <==> #[trigger] self.to_multiset().count(a) > 0,
     {
-        reveal(seq_axioms);
         assert forall |a: A| #[trigger](self.push(a).to_multiset()) =~= self.to_multiset().insert(a) by {
             to_multiset_build(self, a);
         }
@@ -524,7 +502,6 @@ impl<A> Seq<A> {
             forall |i: int| pos <= i < self.len() ==> self.insert(pos, elt)[i+1] == self[i],
             self.insert(pos, elt)[pos] == elt,
     {
-        reveal(seq_axioms);
     }
 
     /// Remove item at index i, shifting remaining elements to the left
@@ -543,7 +520,6 @@ impl<A> Seq<A> {
             forall |index: int| 0 <= index < i ==> #[trigger] self.remove(i)[index] == self[index],
             forall |index: int| i <= index < self.len() - 1 ==> #[trigger] self.remove(i)[index] == self[index+1],
     {
-        reveal(seq_axioms);
     }
 
     /// If a given element occurs at least once in a sequence, the sequence without
@@ -592,7 +568,6 @@ impl<A> Seq<A> {
     /// returns `f(...f(f(b, x0), x1), ..., xn)`.
     pub open spec fn fold_left<B>(self, b: B, f: spec_fn(B, A) -> B) -> (res: B)
         decreases self.len(),
-        via Self::fold_left_decreases::<B>
     {
         if self.len() == 0 {
             b
@@ -600,14 +575,12 @@ impl<A> Seq<A> {
             f(self.drop_last().fold_left(b, f), self.last())
         }
     }
-    #[verifier::decreases_by] proof fn fold_left_decreases<B>(self, b: B, f: spec_fn(B, A) -> B) { reveal(seq_axioms); }
 
     /// Equivalent to [`Self::fold_left`] but defined by breaking off the leftmost element when
     /// recursing, rather than the rightmost. See [`Self::lemma_fold_left_alt`] that proves
     /// equivalence.
     pub open spec fn fold_left_alt<B>(self, b: B, f: spec_fn(B, A) -> B) -> (res: B)
         decreases self.len(),
-        via Self::fold_left_alt_decreases::<B>
     {
         if self.len() == 0 {
             b
@@ -615,7 +588,6 @@ impl<A> Seq<A> {
             self.subrange(1, self.len() as int).fold_left_alt(f(b, self[0]), f)
         }
     }
-    #[verifier::decreases_by] proof fn fold_left_alt_decreases<B>(self, b: B, f: spec_fn(B, A) -> B) { reveal(seq_axioms); }
 
     /// An auxiliary lemma for proving [`Self::lemma_fold_left_alt`].
     proof fn aux_lemma_fold_left_alt<B>(self, b: B, f: spec_fn(B, A) -> B, k: int)
@@ -627,7 +599,6 @@ impl<A> Seq<A> {
           self.fold_left_alt(b, f),
         decreases k,
     {
-        reveal(seq_axioms);
         reveal_with_fuel(Seq::fold_left_alt, 2);
         if k == 1 {
             // trivial base case
@@ -654,7 +625,6 @@ impl<A> Seq<A> {
         ensures self.fold_left(b, f) == self.fold_left_alt(b, f),
         decreases self.len(),
     {
-        reveal(seq_axioms);
         reveal_with_fuel(Seq::fold_left, 2);
         reveal_with_fuel(Seq::fold_left_alt, 2);
         if self.len() <= 1 {
@@ -675,7 +645,6 @@ impl<A> Seq<A> {
     /// returns `f(x0, f(x1, f(x2, ..., f(xn, b)...)))`.
     pub open spec fn fold_right<B>(self, f: spec_fn(A, B) -> B, b: B) -> (res: B)
         decreases self.len(),
-        via Self::fold_right_decreases::<B>
     {
         if self.len() == 0 {
             b
@@ -683,14 +652,12 @@ impl<A> Seq<A> {
             self.drop_last().fold_right(f, f(self.last(), b))
         }
     }
-    #[verifier::decreases_by] proof fn fold_right_decreases<B>(self, f: spec_fn(A, B) -> B, b: B) { reveal(seq_axioms); }
 
     /// Equivalent to [`Self::fold_right`] but defined by breaking off the leftmost element when
     /// recursing, rather than the rightmost. See [`Self::lemma_fold_right_alt`] that proves
     /// equivalence.
     pub open spec fn fold_right_alt<B>(self, f: spec_fn(A, B) -> B, b: B) -> (res: B)
         decreases self.len(),
-        via Self::fold_right_alt_decreases::<B>
     {
         if self.len() == 0 {
             b
@@ -698,7 +665,6 @@ impl<A> Seq<A> {
             f(self[0], self.subrange(1, self.len() as int).fold_right_alt(f, b))
         }
     }
-    #[verifier::decreases_by] proof fn fold_right_alt_decreases<B>(self, f: spec_fn(A, B) -> B, b: B) { reveal(seq_axioms); }
 
     /// An auxiliary lemma for proving [`Self::lemma_fold_right_alt`].
     proof fn aux_lemma_fold_right_alt<B>(self, f: spec_fn(A, B) -> B, b: B, k: int)
@@ -708,7 +674,6 @@ impl<A> Seq<A> {
           self.fold_right(f, b),
         decreases self.len(),
     {
-        reveal(seq_axioms);
         reveal_with_fuel(Seq::fold_right, 2);
         if k == self.len() - 1 {
             // trivial base case
@@ -734,7 +699,6 @@ impl<A> Seq<A> {
         ensures self.fold_right(f, b) == self.fold_right_alt(f, b),
         decreases self.len(),
     {
-        reveal(seq_axioms);
         reveal_with_fuel(Seq::fold_right, 2);
         reveal_with_fuel(Seq::fold_right_alt, 2);
         if self.len() <= 1 {
@@ -757,7 +721,6 @@ impl<A> Seq<A> {
         decreases
             self.len()
     {
-        reveal(seq_axioms);
         if self.len() == 0 {
             assert(forall |x: A| self.to_multiset().contains(x) ==> self.to_multiset().count(x) == 1);
         } else {
@@ -776,7 +739,6 @@ impl<A> Seq<A> {
         ensures
             #[trigger] self.drop_last().push(self.last()) =~= self,
     {
-        reveal(seq_axioms);
     }
 
     /// If a predicate is true at every index of a sequence,
@@ -789,7 +751,6 @@ impl<A> Seq<A> {
         ensures
             forall |x: A| #[trigger] self.contains(x) ==> #[trigger] f(x),
     {
-        reveal(seq_axioms);
         assert(forall |i: int| 0 <= i < self.len() ==> #[trigger] self.contains(self[i]));
     }
 
@@ -803,7 +764,6 @@ impl<A> Seq<A> {
         ensures
             forall |i: int| 0<= i < self.len() ==> #[trigger] f(self[i]),   
     {
-        reveal(seq_axioms);
         assert forall |i: int| 0<= i < self.len() implies #[trigger] f(self[i]) by {
             assert(self.contains(self[i]));
         }
@@ -818,7 +778,6 @@ impl<A> Seq<A> {
         ensures 
             self.subrange(0,pos) + self.subrange(pos,self.len() as int) =~= self
     {
-        reveal(seq_axioms);
     }
 
     /// Any element in a slice is included in the original sequence.
@@ -831,7 +790,6 @@ impl<A> Seq<A> {
             pos - a < new.len(),
             new[pos-a] == self[pos],
     {
-        reveal(seq_axioms);
     }
 
     /// A slice (from s2..e2) of a slice (from s1..e1) of a sequence is equal to just a 
@@ -843,7 +801,6 @@ impl<A> Seq<A> {
         ensures
             self.subrange(s1,e1).subrange(s2,e2) =~= self.subrange(s1+s2,s1+e2),
     {
-        reveal(seq_axioms);
     }
     
     /// A sequence of unique items, when converted to a set, produces a set with matching length
@@ -852,7 +809,6 @@ impl<A> Seq<A> {
         ensures self.len() == self.to_set().len()
         decreases self.len(),
     {
-        reveal(seq_axioms);
         seq_to_set_equal_rec::<A>(self);
         if self.len() == 0 {
         } else {
@@ -871,7 +827,6 @@ impl<A> Seq<A> {
         ensures self.to_set().len() <= self.len(),
         decreases self.len(),
     {
-        reveal(seq_axioms);
         lemma_seq_properties::<A>();
         lemma_set_properties::<A>();
         if self.len() == 0 {}
@@ -887,7 +842,6 @@ impl<A> Seq<A> {
         ensures
             self.to_set().len() == 0 <==> self.len() == 0,
     {
-        reveal(seq_axioms);
         assert(self.len() == 0 ==> self.to_set().len() == 0) by {
             self.lemma_cardinality_of_set()
         }
@@ -908,7 +862,6 @@ impl<A> Seq<A> {
             self.no_duplicates(),
         decreases self.len(),
     {
-        reveal(seq_axioms);
         lemma_seq_properties::<A>();
         if self.len() == 0 {}
         else {
@@ -948,7 +901,6 @@ impl<A,B> Seq<(A,B)>{
         decreases
             self.len(),
     {
-        reveal(seq_axioms);
         if self.len() > 0 {
             self.drop_last().unzip_ensures();
         }
@@ -959,7 +911,6 @@ impl<A,B> Seq<(A,B)>{
     pub proof fn lemma_zip_of_unzip(self)
         ensures self.unzip().0.zip_with(self.unzip().1) =~= self,
     {
-        reveal(seq_axioms);
     }
 
 }
@@ -981,7 +932,6 @@ impl<A> Seq<Seq<A>>{
     /// ```
     pub open spec fn flatten(self) -> Seq<A>
         decreases self.len()
-        via Self::flatten_decreases
     {
         if self.len() == 0 {
             Seq::empty()
@@ -989,7 +939,6 @@ impl<A> Seq<Seq<A>>{
             self.first().add(self.drop_first().flatten())
         }
     }
-    #[verifier::decreases_by] proof fn flatten_decreases(self) { reveal(seq_axioms); }
 
     /// Flattens a sequence of sequences into a single sequence by concatenating 
     /// subsequences in reverse order, i.e. starting from the last element.
@@ -997,7 +946,6 @@ impl<A> Seq<Seq<A>>{
     /// applied along the oppositive associativity for the sake of proof reasoning in that direction.
     pub open spec fn flatten_alt(self) -> Seq<A>
         decreases self.len()
-        via Self::flatten_alt_decreases
     {
         if self.len() == 0 {
             Seq::empty()
@@ -1005,7 +953,6 @@ impl<A> Seq<Seq<A>>{
             self.drop_last().flatten_alt().add(self.last())
         }
     }
-    #[verifier::decreases_by] proof fn flatten_alt_decreases(self) { reveal(seq_axioms); }
 
     /// Flattening a sequence of a sequence x, where x has length 1, 
     /// results in a sequence equivalent to the single element of x
@@ -1013,7 +960,6 @@ impl<A> Seq<Seq<A>>{
         ensures
             self.len() == 1 ==> self.flatten() == self.first(),
     {
-        reveal(seq_axioms);
         reveal(Seq::add_empty_right);
         if self.len() == 1 {
             assert(self.flatten() =~= self.first().add(self.drop_first().flatten()));
@@ -1030,7 +976,6 @@ impl<A> Seq<Seq<A>>{
         decreases
             self.len()
     {
-        reveal(seq_axioms);
         if self.len() == 1 {
             self.lemma_flatten_one_element();
             self.lemma_flatten_and_flatten_alt_are_equivalent();
@@ -1053,7 +998,6 @@ impl<A> Seq<Seq<A>>{
         decreases
             self.len(),
     {
-        reveal(seq_axioms);
         lemma_seq_properties::<A>();
         lemma_seq_properties::<Seq<A>>();
 
@@ -1072,7 +1016,6 @@ impl<A> Seq<Seq<A>>{
         decreases
             self.len(),
     {
-        reveal(seq_axioms);
         reveal(Seq::add_empty_right);
         reveal(Seq::push_distributes_over_add);
         if self.len() != 0 {
@@ -1093,7 +1036,6 @@ impl Seq<int> {
         recommends 
             0 < self.len(),
         decreases self.len()
-        via Self::max_decreases
     {
         if self.len() == 1 {
             self[0]
@@ -1105,7 +1047,6 @@ impl Seq<int> {
             else {later_max}
         }
     }
-    #[verifier::decreases_by] proof fn max_decreases(self) { reveal(seq_axioms); }
 
     /// Proof of correctness and expected properties for max function
     pub proof fn max_ensures(self)
@@ -1116,7 +1057,6 @@ impl Seq<int> {
         decreases 
             self.len(),
     {
-        reveal(seq_axioms);
         if self.len() <=1 {}
         else {
             let elt = self.drop_first().max();
@@ -1138,7 +1078,6 @@ impl Seq<int> {
         recommends 
             0 < self.len(),
         decreases self.len()
-        via Self::min_decreases
     {
         if self.len() == 1 {
             self[0]
@@ -1150,7 +1089,6 @@ impl Seq<int> {
             else {later_min}
         }
     }
-    #[verifier::decreases_by] proof fn min_decreases(self) { reveal(seq_axioms); }
 
     /// Proof of correctness and expected properties for min function
     pub proof fn min_ensures(self)
@@ -1161,7 +1099,6 @@ impl Seq<int> {
         decreases 
             self.len(),
     {
-        reveal(seq_axioms);
         if self.len() <=1 {}
         else {
             let elt = self.drop_first().min();
@@ -1188,7 +1125,6 @@ impl Seq<int> {
             self.to_multiset() =~= self.sort().to_multiset(),
             sorted_by(self.sort(), |x: int,y: int| x <= y),
     {
-        reveal(seq_axioms);
         self.lemma_sort_by_ensures(|x: int,y: int| x <= y);
     }
 
@@ -1200,7 +1136,6 @@ impl Seq<int> {
         ensures
             self.subrange(from, to).max() <= self.max(),
     {
-        reveal(seq_axioms);
         self.max_ensures();
         self.subrange(from, to).max_ensures();
     }
@@ -1213,7 +1148,6 @@ impl Seq<int> {
         ensures
             self.subrange(from, to).min() >= self.min(),
     {
-        reveal(seq_axioms);
         self.min_ensures();
         self.subrange(from, to).min_ensures();
     }
@@ -1227,7 +1161,6 @@ spec fn merge_sorted_with<A>(left: Seq<A>, right: Seq<A>, leq: spec_fn(A,A) -> b
         total_ordering(leq),
     decreases
         left.len(), right.len()
-    via merge_sorted_with_decreases::<A>
 {
     if left.len() == 0 {
         right
@@ -1239,7 +1172,6 @@ spec fn merge_sorted_with<A>(left: Seq<A>, right: Seq<A>, leq: spec_fn(A,A) -> b
         Seq::<A>::empty().push(right.first()) + merge_sorted_with(left, right.drop_first(), leq)
     }
 }
-#[verifier::decreases_by] proof fn merge_sorted_with_decreases<A>(left: Seq<A>, right: Seq<A>, leq: spec_fn(A, A) -> bool) { reveal(seq_axioms); }
 
 proof fn lemma_merge_sorted_with_ensures<A>(left: Seq<A>, right: Seq<A>, leq: spec_fn(A,A) -> bool)
     requires
@@ -1252,7 +1184,6 @@ proof fn lemma_merge_sorted_with_ensures<A>(left: Seq<A>, right: Seq<A>, leq: sp
     decreases
         left.len(), right.len()
 {
-    reveal(seq_axioms);
     lemma_seq_properties::<A>();
     if left.len() == 0 {
         assert(left+right =~= right);
@@ -1311,7 +1242,6 @@ pub proof fn lemma_max_of_concat(x: Seq<int>, y: Seq<int>)
     decreases
         x.len(),
 {
-    reveal(seq_axioms);
     lemma_seq_properties::<int>();
     x.max_ensures();
     y.max_ensures();
@@ -1343,7 +1273,6 @@ pub proof fn lemma_min_of_concat(x: Seq<int>, y: Seq<int>)
     decreases
         x.len(),
 {
-    reveal(seq_axioms);
     x.min_ensures();
     y.min_ensures();
     (x+y).min_ensures();
@@ -1373,7 +1302,6 @@ proof fn to_multiset_build<A>(s: Seq<A>, a: A)
     decreases 
         s.len()
 {
-    reveal(seq_axioms);
     if s.len() == 0 {
         assert(s.to_multiset() =~= Multiset::<A>::empty());
         assert(s.push(a).drop_first() =~= Seq::<A>::empty());
@@ -1393,7 +1321,6 @@ proof fn to_multiset_len<A>(s: Seq<A>)
     decreases
         s.len()
 {
-    reveal(seq_axioms);
     if s.len() == 0 {
         assert(s.to_multiset() =~= Multiset::<A>::empty());
         assert(s.len() == 0);
@@ -1411,7 +1338,6 @@ proof fn to_multiset_contains<A>(s: Seq<A>, a: A)
     decreases
         s.len()
 {
-    reveal(seq_axioms);
     if s.len() != 0 {
         // ==>
         if s.contains(a) {
@@ -1446,7 +1372,6 @@ pub proof fn lemma_append_last<A>(s1: Seq<A>, s2: Seq<A>)
     ensures
         (s1 + s2).last() == s2.last(),
 {
-    reveal(seq_axioms);
 }
 
 /// The concatenation of sequences is associative
@@ -1454,13 +1379,11 @@ pub proof fn lemma_concat_associative<A>(s1: Seq<A>, s2: Seq<A>, s3: Seq<A>)
     ensures
         s1.add(s2.add(s3)) =~= s1.add(s2).add(s3),
 {
-    reveal(seq_axioms);
 }
 
 /// Recursive definition of seq to set conversion
 spec fn seq_to_set_rec<A>(seq: Seq<A>) -> Set<A>
     decreases seq.len()
-    via seq_to_set_rec_decreases::<A>
 {
     if seq.len() == 0 {
         Set::empty()
@@ -1468,14 +1391,12 @@ spec fn seq_to_set_rec<A>(seq: Seq<A>) -> Set<A>
         seq_to_set_rec(seq.drop_last()).insert(seq.last())
     }
 }
-#[verifier::decreases_by] proof fn seq_to_set_rec_decreases<A>(seq: Seq<A>) { reveal(seq_axioms); }
 
 // Helper function showing that the recursive definition of set_to_seq produces a finite set
 proof fn seq_to_set_rec_is_finite<A>(seq: Seq<A>)
     ensures seq_to_set_rec(seq).finite()
     decreases seq.len()
 {
-    reveal(seq_axioms);
     if seq.len() > 0{
         let sub_seq = seq.drop_last();
         assert(seq_to_set_rec(sub_seq).finite()) by {
@@ -1489,7 +1410,6 @@ proof fn seq_to_set_rec_contains<A>(seq: Seq<A>)
     ensures forall |a| #[trigger] seq.contains(a) <==> seq_to_set_rec(seq).contains(a)
     decreases seq.len()
 {
-    reveal(seq_axioms);
     if seq.len() > 0 {
         assert(forall |a| #[trigger] seq.drop_last().contains(a) <==> seq_to_set_rec(seq.drop_last()).contains(a)) by {
             seq_to_set_rec_contains(seq.drop_last());
@@ -1513,7 +1433,6 @@ proof fn seq_to_set_rec_contains<A>(seq: Seq<A>)
 proof fn seq_to_set_equal_rec<A>(seq: Seq<A>)
     ensures seq.to_set() == seq_to_set_rec(seq)
 {
-    reveal(seq_axioms);
     assert(forall |n| #[trigger] seq.contains(n) <==> seq_to_set_rec(seq).contains(n)) by {
         seq_to_set_rec_contains(seq);
     }
@@ -1525,7 +1444,6 @@ proof fn seq_to_set_equal_rec<A>(seq: Seq<A>)
 pub proof fn seq_to_set_is_finite<A>(seq: Seq<A>)
     ensures seq.to_set().finite()
 {
-    reveal(seq_axioms);
     assert(seq.to_set().finite()) by {
         seq_to_set_equal_rec(seq);
         seq_to_set_rec_is_finite(seq);
@@ -1537,7 +1455,6 @@ pub proof fn seq_to_set_is_finite<A>(seq: Seq<A>)
 pub proof fn seq_to_set_is_finite_broadcast<A>(seq: Seq<A>)
     ensures #[trigger] seq.to_set().finite()
 {
-    reveal(seq_axioms);
     // TODO: merge this with seq_to_set_is_finite when broadcast_forall is better supported
 }
 
@@ -1553,7 +1470,6 @@ pub proof fn lemma_no_dup_in_concat<A>(a: Seq<A>, b: Seq<A>)
     ensures
         #[trigger] (a+b).no_duplicates(),
 {
-    reveal(seq_axioms);
 }
 
 /// Flattening sequences of sequences is distributive over concatenation. That is, concatenating
@@ -1565,7 +1481,6 @@ pub proof fn lemma_flatten_concat<A>(x: Seq<Seq<A>>, y: Seq<Seq<A>>)
     decreases 
         x.len()
 {
-    reveal(seq_axioms);
     if x.len() == 0 {
         assert(x+y =~= y);
     } else {
@@ -1586,7 +1501,6 @@ pub proof fn lemma_flatten_alt_concat<A>(x: Seq<Seq<A>>, y: Seq<Seq<A>>)
     decreases 
         y.len()
 {
-    reveal(seq_axioms);
     if y.len() == 0 {
         assert(x+y =~= x);
     } else {
@@ -1603,7 +1517,6 @@ pub proof fn lemma_seq_union_to_multiset_commutative<A>(a: Seq<A>, b: Seq<A>)
     ensures
         (a+b).to_multiset() =~= (b+a).to_multiset(),
 {
-    reveal(seq_axioms);
     lemma_multiset_commutative(a,b);
     lemma_multiset_commutative(b,a);
 }
@@ -1616,7 +1529,6 @@ pub proof fn lemma_multiset_commutative<A>(a: Seq<A>, b: Seq<A>)
     decreases
         a.len(),
 {
-    reveal(seq_axioms);
     if a.len() == 0 {
         assert(a+b =~= b);
     }
@@ -1638,7 +1550,6 @@ ensures
 decreases
     x.len(), y.len()
 {
-    reveal(seq_axioms);
     x.to_multiset_ensures();
     y.to_multiset_ensures();
     if x.len() == 0 || y.len() == 0 {}
@@ -1665,7 +1576,6 @@ pub proof fn lemma_seq_contains<A>(s: Seq<A>, x: A)
     ensures
         s.contains(x) <==> exists |i: int| 0<= i < s.len() && s[i]==x,
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1674,7 +1584,6 @@ pub proof fn lemma_seq_empty_contains_nothing<A>(x: A)
     ensures
         !Seq::<A>::empty().contains(x),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1684,7 +1593,6 @@ pub proof fn lemma_seq_empty_equality<A>(s: Seq<A>)
     ensures
         s.len() == 0 ==> s=~= Seq::<A>::empty(),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1696,7 +1604,6 @@ pub proof fn lemma_seq_concat_contains_all_elements<A>(x: Seq<A>, y: Seq<A>, elt
     decreases
         x.len(),
 {
-    reveal(seq_axioms);
     if x.len() == 0 && y.len() >0 {
         assert((x+y) =~= y);
     } else {
@@ -1720,7 +1627,6 @@ pub proof fn lemma_seq_contains_after_push<A>(s: Seq<A>, v: A, x: A)
         (s.push(v).contains(x) <==> v==x || s.contains(x))
             && s.push(v).contains(v),
 {
-    reveal(seq_axioms);
     assert forall |elt: A| #[trigger] s.contains(elt) implies #[trigger] s.push(v).contains(elt)
     by {
         let index = choose |i: int| 0 <= i < s.len() && s[i] == elt;
@@ -1738,7 +1644,6 @@ pub proof fn lemma_seq_subrange_elements<A>(s: Seq<A>, start: int, stop: int, x:
     ensures s.subrange(start,stop).contains(x) <==> 
         (exists |i: int| 0 <= start <= i < stop <= s.len() && s[i] == x),
 {
-    reveal(seq_axioms);
     assert((exists |i: int| 0 <= start <= i < stop <= s.len() && s[i] == x) ==> s.subrange(start,stop).contains(x)) by {
         if exists |i: int| 0 <= start <= i < stop <= s.len() && s[i] == x
         {
@@ -1757,7 +1662,6 @@ pub proof fn lemma_seq_take_len<A>(s: Seq<A>, n: int)
     ensures
         0 <= n <= s.len() ==> s.take(n).len() == n,
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1769,7 +1673,6 @@ pub proof fn lemma_seq_take_contains<A>(s: Seq<A>, n: int, x: A)
     ensures
         s.take(n).contains(x) <==> (exists |i: int| 0<= i < n <= s.len() && s[i] == x),
 {
-    reveal(seq_axioms);
     assert ((exists |i: int| 0<= i < n <= s.len() && #[trigger] s[i] == x) ==> s.take(n).contains(x)) by {
         if exists |i: int| 0<= i < n <= s.len() && #[trigger] s[i] == x {
             let index = choose |i: int| 0<= i < n <= s.len() && #[trigger] s[i] == x;
@@ -1785,7 +1688,6 @@ pub proof fn lemma_seq_take_index<A>(s: Seq<A>, n: int, j: int)
     ensures
         0 <= j < n <= s.len() ==> s.take(n)[j] == s[j],
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1795,7 +1697,6 @@ pub proof fn lemma_seq_skip_len<A>(s: Seq<A>, n: int)
     ensures
         0 <= n <= s.len() ==> s.skip(n).len() == s.len() - n,
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1807,7 +1708,6 @@ pub proof fn lemma_seq_skip_contains<A>(s: Seq<A>, n: int, x: A)
     ensures
         s.skip(n).contains(x) <==> (exists |i: int| 0<= n <= i < s.len() && s[i] == x),
 {
-    reveal(seq_axioms);
     assert((exists |i: int| 0<= n <= i < s.len() && #[trigger] s[i] == x) ==> s.skip(n).contains(x)) by {
         let index = choose |i: int| 0<= n <= i < s.len() && #[trigger] s[i] == x;
         lemma_seq_skip_index(s, n, index-n);
@@ -1821,7 +1721,6 @@ pub proof fn lemma_seq_skip_index<A>(s: Seq<A>, n: int, j: int)
     ensures
         0 <=n && 0<= j < (s.len() - n) ==> s.skip(n)[j] == s[j+n],
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1832,7 +1731,6 @@ pub proof fn lemma_seq_skip_index2<A>(s: Seq<A>, n: int, k: int)
     ensures 
         0 <= n <= k < s.len() ==> (s.skip(n))[k-n] == s[k]
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1843,7 +1741,6 @@ pub proof fn lemma_seq_append_take_skip<A>(a: Seq<A>, b: Seq<A>, n: int)
     ensures
         n == a.len() ==> ((a+b).take(n) =~= a && (a+b).skip(n) =~= b),
 {
-    reveal(seq_axioms);
 }
 
 /************* Lemmas about the Commutability of Take and Skip with Update ************/
@@ -1856,7 +1753,6 @@ pub proof fn lemma_seq_take_update_commut1<A>(s: Seq<A>, i: int, v: A, n: int)
     ensures
         0 <= i < n <= s.len() ==> #[trigger] s.update(i,v).take(n) =~= s.take(n).update(i,v),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1867,7 +1763,6 @@ pub proof fn lemma_seq_take_update_commut2<A>(s: Seq<A>, i: int, v: A, n: int)
     ensures
         0 <= n <= i < s.len() ==> #[trigger] s.update(i,v).take(n) =~= s.take(n),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1878,7 +1773,6 @@ pub proof fn lemma_seq_skip_update_commut1<A>(s: Seq<A>, i: int, v: A, n: int)
     ensures
         0 <= n <= i < s.len() ==> #[trigger] s.update(i,v).skip(n) =~= s.skip(n).update(i-n,v),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1889,7 +1783,6 @@ pub proof fn lemma_seq_skip_update_commut2<A>(s: Seq<A>, i: int, v: A, n: int)
     ensures
         0 <= i < n <= s.len() ==> s.update(i,v).skip(n) =~= s.skip(n),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1899,7 +1792,6 @@ pub proof fn lemma_seq_skip_build_commut<A>(s: Seq<A>, v: A, n: int)
     ensures
         0 <= n <= s.len() ==> s.push(v).skip(n) =~= s.skip(n).push(v), 
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1908,7 +1800,6 @@ pub proof fn lemma_seq_skip_nothing<A>(s: Seq<A>, n: int)
     ensures
         n == 0 ==> s.skip(n) =~= s,
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1917,7 +1808,6 @@ pub proof fn lemma_seq_take_nothing<A>(s: Seq<A>, n: int)
     ensures
         n == 0 ==> s.take(n) =~= Seq::<A>::empty(),
 {
-    reveal(seq_axioms);
 }
 
 // This verified lemma used to be an axiom in the Dafny prelude
@@ -1928,7 +1818,6 @@ pub proof fn lemma_seq_skip_of_skip<A>(s: Seq<A>, m: int, n: int)
     ensures
         (0 <= m && 0 <= n && m+n <= s.len()) ==> s.skip(m).skip(n) =~= s.skip(m+n),
 {
-    reveal(seq_axioms);
 }
 
 /// Properties of sequences from the Dafny prelude (which were axioms in Dafny, but proven here in Verus)
@@ -1966,7 +1855,6 @@ pub proof fn lemma_seq_properties<A>()
         forall |s: Seq<A>| s.len() == #[trigger] s.to_multiset().len(),  //from to_multiset_ensures
         forall |s: Seq<A>, a: A| s.contains(a) <==> #[trigger] s.to_multiset().count(a) > 0, //from to_multiset_ensures
 {
-    reveal(seq_axioms);
     assert forall |x: Seq<A>, y: Seq<A>, elt: A| #[trigger] (x+y).contains(elt) implies x.contains(elt) ||  y.contains(elt) by {
         lemma_seq_concat_contains_all_elements(x, y, elt);
     }
