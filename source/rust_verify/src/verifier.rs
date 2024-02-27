@@ -1427,7 +1427,11 @@ impl Verifier {
                                 if used_axioms.len() > 0 {
                                     let axioms_list = used_axioms
                                         .iter()
-                                        .map(|x| (**x).clone())
+                                        .map(|x| {
+                                            fun_as_friendly_rust_name(
+                                                &function_opgen.ctx().fun_ident_map[x],
+                                            )
+                                        })
                                         .collect::<Vec<String>>()
                                         .join(", ");
                                     let msg = format!(
