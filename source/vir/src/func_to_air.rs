@@ -28,7 +28,7 @@ use air::ast::{
 };
 use air::ast_util::{
     bool_typ, ident_apply, ident_binder, ident_var, int_typ, mk_and, mk_bind_expr, mk_eq,
-    mk_implies, str_apply, str_ident, str_typ, str_var, string_apply,
+    mk_implies, mk_unnamed_axiom, str_apply, str_ident, str_typ, str_var, string_apply,
 };
 use air::messages::ArcDynMessageLabel;
 use std::collections::HashMap;
@@ -147,7 +147,7 @@ pub(crate) fn module_reveal_axioms(
                 .collect::<Vec<Expr>>(),
         );
 
-        let axiom = Arc::new(DeclX::Axiom(revealed_fuels));
+        let axiom = mk_unnamed_axiom(revealed_fuels);
         decl_commands.push(Arc::new(CommandX::Global(axiom)));
     }
 }
@@ -164,7 +164,7 @@ pub(crate) fn broadcast_forall_group_axioms(
         let is_imported = crate_name != group_crate;
         if is_imported {
             // (axiom (fuel_bool_default fuel%group))
-            let group_axiom = Arc::new(DeclX::Axiom(fuel_group.clone()));
+            let group_axiom = mk_unnamed_axiom(fuel_group.clone());
             decl_commands.push(Arc::new(CommandX::Global(group_axiom)));
         }
     }
@@ -178,7 +178,7 @@ pub(crate) fn broadcast_forall_group_axioms(
     if member_fuels.len() > 0 {
         // (axiom (=> (fuel_bool_default fuel%group) (and ... (fuel_bool_default fuel%member) ...)))
         let imply = mk_implies(&fuel_group, &mk_and(&member_fuels));
-        let axiom = Arc::new(DeclX::Axiom(imply));
+        let axiom = mk_unnamed_axiom(imply);
         decl_commands.push(Arc::new(CommandX::Global(axiom)));
     }
 }
@@ -331,7 +331,7 @@ fn func_body_to_air(
     //   (axiom (fuel_bool_default fuel%f))
     if function.x.fuel > 0 {
         let axiom_expr = str_apply(&FUEL_BOOL_DEFAULT, &vec![ident_var(&id_fuel)]);
-        let fuel_axiom = Arc::new(DeclX::Axiom(axiom_expr));
+        let fuel_axiom = mk_unnamed_axiom(axiom_expr);
         decl_commands.push(Arc::new(CommandX::Global(fuel_axiom)));
     }
 
@@ -391,8 +391,8 @@ fn func_body_to_air(
         let forall_zero = mk_bind_expr(&bind_zero, &eq_zero);
         let forall_body = mk_bind_expr(&bind_body, &implies_body);
         let fuel_nat_decl = Arc::new(DeclX::Const(fuel_nat_f, str_typ(FUEL_TYPE)));
-        let axiom_zero = Arc::new(DeclX::Axiom(forall_zero));
-        let axiom_body = Arc::new(DeclX::Axiom(forall_body));
+        let axiom_zero = mk_unnamed_axiom(forall_zero);
+        let axiom_body = mk_unnamed_axiom(forall_body);
         decl_commands.push(Arc::new(CommandX::Global(fuel_nat_decl)));
         decl_commands.push(Arc::new(CommandX::Global(axiom_zero)));
         decl_commands.push(Arc::new(CommandX::Global(axiom_body)));
@@ -409,7 +409,7 @@ fn func_body_to_air(
         def_body,
     )?;
     let fuel_bool = str_apply(FUEL_BOOL, &vec![ident_var(&id_fuel)]);
-    let def_axiom = Arc::new(DeclX::Axiom(mk_implies(&fuel_bool, &e_forall)));
+    let def_axiom = mk_unnamed_axiom(mk_implies(&fuel_bool, &e_forall));
     decl_commands.push(Arc::new(CommandX::Global(def_axiom)));
     Ok(check_state.fun_ssts)
 }
@@ -476,7 +476,7 @@ pub fn req_ens_to_air(
         }
         let body = mk_and(&exprs);
         let e_forall = func_def_quant(ctx, &name, &typ_params, &typ_args, &params, &vec![], body)?;
-        let req_ens_axiom = Arc::new(DeclX::Axiom(e_forall));
+        let req_ens_axiom = mk_unnamed_axiom(e_forall);
         commands.push(Arc::new(CommandX::Global(req_ens_axiom)));
         Ok(true)
     } else {
@@ -771,7 +771,7 @@ pub fn func_decl_to_air(
             };
 
             let expr = exp_to_expr(ctx, &exp, &ExprCtxt::new_mode(ExprMode::Spec))?;
-            let axiom = Arc::new(DeclX::Axiom(expr));
+            let axiom = mk_unnamed_axiom(expr);
             decl_commands.push(Arc::new(CommandX::Global(axiom)));
         }
     }
@@ -857,7 +857,7 @@ pub fn func_axioms_to_air(
                     ),
                     &mk_implies(&mk_and(&f_pre), &post),
                 );
-                let inv_axiom = Arc::new(DeclX::Axiom(e_forall));
+                let inv_axiom = mk_unnamed_axiom(e_forall);
                 decl_commands.push(Arc::new(CommandX::Global(inv_axiom)));
             }
         }
@@ -914,7 +914,7 @@ pub fn func_axioms_to_air(
                     // TODO: remove external_body from FunctionAttrsX; it was only needed here
                     expr
                 };
-                let axiom = Arc::new(DeclX::Axiom(fuel_imply));
+                let axiom = mk_unnamed_axiom(fuel_imply);
                 decl_commands.push(Arc::new(CommandX::Global(axiom)));
             }
         }

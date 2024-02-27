@@ -38,7 +38,8 @@ use air::ast::{
 use air::ast_util::{
     bool_typ, bv_typ, ident_apply, ident_binder, ident_typ, ident_var, int_typ, mk_and,
     mk_bind_expr, mk_bitvector_option, mk_eq, mk_exists, mk_implies, mk_ite, mk_nat, mk_not,
-    mk_option_command, mk_or, mk_sub, mk_xor, str_apply, str_ident, str_typ, str_var, string_var,
+    mk_option_command, mk_or, mk_sub, mk_unnamed_axiom, mk_xor, str_apply, str_ident, str_typ,
+    str_var, string_var,
 };
 use num_bigint::BigInt;
 use std::collections::{BTreeMap, HashSet};
@@ -1687,7 +1688,7 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
             for (x, typ) in typ_inv_vars.iter() {
                 let typ_inv = typ_invariant(ctx, typ, &ident_var(&suffix_local_unique_id(x)));
                 if let Some(expr) = typ_inv {
-                    local.push(Arc::new(DeclX::Axiom(expr)));
+                    local.push(mk_unnamed_axiom(expr));
                 }
             }
 
@@ -1739,7 +1740,7 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
 
             let mut local = state.local_bv_shared.clone();
             for req in requires_air.iter() {
-                local.push(Arc::new(DeclX::Axiom(req.clone())));
+                local.push(mk_unnamed_axiom(req.clone()));
             }
 
             let mut air_body: Vec<Stmt> = Vec::new();
@@ -1967,7 +1968,7 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
             for (x, typ) in typ_inv_vars.iter() {
                 let typ_inv = typ_invariant(ctx, typ, &ident_var(&suffix_local_unique_id(x)));
                 if let Some(expr) = typ_inv {
-                    local.push(Arc::new(DeclX::Axiom(expr)));
+                    local.push(mk_unnamed_axiom(expr));
                 }
             }
 
@@ -2265,7 +2266,7 @@ fn set_fuel(ctx: &Ctx, local: &mut Vec<Decl>, hidden: &Vec<Fun>) {
         let or = Arc::new(ExprX::Multi(air::ast::MultiOp::Or, Arc::new(disjuncts)));
         mk_bind_expr(&bind, &or)
     };
-    local.push(Arc::new(DeclX::Axiom(fuel_expr)));
+    local.push(mk_unnamed_axiom(fuel_expr));
 }
 
 fn mk_static_prelude(ctx: &Ctx, statics: &Vec<Fun>) -> Vec<Stmt> {
@@ -2426,7 +2427,7 @@ pub(crate) fn body_stm_to_air(
             let typ_inv =
                 typ_invariant(ctx, &param.x.typ, &ident_var(&suffix_local_stmt_id(&param.x.name)));
             if let Some(expr) = typ_inv {
-                local.push(Arc::new(DeclX::Axiom(expr)));
+                local.push(mk_unnamed_axiom(expr));
             }
         }
     }
@@ -2439,7 +2440,7 @@ pub(crate) fn body_stm_to_air(
             let expr_ctxt = &ExprCtxt::new_mode(ExprMode::BodyPre);
             exp_to_expr(ctx, &req, expr_ctxt)?
         };
-        local.push(Arc::new(DeclX::Axiom(e)));
+        local.push(mk_unnamed_axiom(e));
     }
 
     if is_integer_ring {

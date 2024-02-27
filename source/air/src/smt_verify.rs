@@ -1,5 +1,6 @@
 use crate::ast::{
-    BinaryOp, BindX, Decl, DeclX, Expr, ExprX, Ident, MultiOp, Quant, Query, StmtX, TypX, UnaryOp,
+    Axiom, BinaryOp, BindX, Decl, DeclX, Expr, ExprX, Ident, MultiOp, Quant, Query, StmtX, TypX,
+    UnaryOp,
 };
 use crate::ast_util::{ident_var, mk_and, mk_implies, mk_not, str_ident, str_var};
 use crate::context::{AssertionInfo, AxiomInfo, Context, ContextState, ValidityResult};
@@ -88,7 +89,7 @@ pub(crate) fn smt_add_decl<'ctx>(context: &mut Context, decl: &Decl) {
             context.smt_log.log_decl(decl);
         }
         DeclX::Var(_, _) => {}
-        DeclX::Axiom(expr) => {
+        DeclX::Axiom(Axiom { named, expr }) => {
             let expr = elim_zero_args_expr(expr);
             let mut infos: Vec<AssertionInfo> = Vec::new();
             let mut axiom_infos: Vec<AxiomInfo> = Vec::new();
@@ -101,7 +102,7 @@ pub(crate) fn smt_add_decl<'ctx>(context: &mut Context, decl: &Decl) {
                     .expect("internal error: duplicate assert_info");
                 smt_add_decl(context, &info.decl);
             }
-            context.smt_log.log_assert(&labeled_expr);
+            context.smt_log.log_assert(named, &labeled_expr);
         }
     }
 }
@@ -177,12 +178,12 @@ pub(crate) fn smt_check_assertion<'ctx>(
     }
 
     if let Some(disabled_expr) = disabled_expr {
-        context.smt_log.log_assert(&disabled_expr);
+        context.smt_log.log_assert(&None, &disabled_expr);
     }
 
     let mut discovered_error = None;
     let mut discovered_additional_info: Vec<ArcDynMessage> = Vec::new();
-    context.smt_log.log_assert(&str_var(QUERY));
+    context.smt_log.log_assert(&None, &str_var(QUERY));
 
     context.smt_log.log_set_option("rlimit", &context.rlimit.to_string());
     context.set_z3_param_u32("rlimit", context.rlimit, false);
@@ -324,7 +325,7 @@ pub(crate) fn smt_check_assertion<'ctx>(
                     // Disable this label in subsequent check-sat calls to get additional errors
                     info.disabled = true;
                     let disable_label = mk_not(&ident_var(&info.label));
-                    context.smt_log.log_assert(&disable_label);
+                    context.smt_log.log_assert(&None, &disable_label);
 
                     break;
                 }
@@ -399,7 +400,7 @@ pub(crate) fn smt_check_query<'ctx>(
     // check assertion
     let not_expr = Arc::new(ExprX::Unary(UnaryOp::Not, labeled_assertion));
     context.smt_log.log_decl(&Arc::new(DeclX::Const(str_ident(QUERY), Arc::new(TypX::Bool))));
-    context.smt_log.log_assert(&mk_implies(&str_var(QUERY), &not_expr));
+    context.smt_log.log_assert(&None, &mk_implies(&str_var(QUERY), &not_expr));
     let result =
         smt_check_assertion(context, diagnostics, infos, air_model, false, report_long_running);
 
