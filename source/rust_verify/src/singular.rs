@@ -403,7 +403,7 @@ pub fn check_singular_valid(
     let mut singular_process = singular_manager.launch();
     let res = singular_process.send_commands(query.as_bytes().to_vec());
     if (res.len() == 1) && (res[0] == "0") {
-        ValidityResult::Valid
+        ValidityResult::Valid(air::context::UsageInfo::None)
     } else if res[0].contains("?") {
         ValidityResult::UnexpectedOutput(String::from(format!(
             "{} \ngenerated singular query: {}",

@@ -23,8 +23,8 @@ use crate::sst_util::{subst_exp, subst_stm};
 use crate::update_cell::UpdateCell;
 use crate::util::vec_map;
 use air::ast::{
-    BinaryOp, Bind, BindX, Binder, BinderX, Command, CommandX, Commands, DeclX, Expr, ExprX, Quant,
-    Trigger, Triggers,
+    Axiom, BinaryOp, Bind, BindX, Binder, BinderX, Command, CommandX, Commands, DeclX, Expr, ExprX,
+    Quant, Trigger, Triggers,
 };
 use air::ast_util::{
     bool_typ, ident_apply, ident_binder, ident_var, int_typ, mk_and, mk_bind_expr, mk_eq,
@@ -914,7 +914,11 @@ pub fn func_axioms_to_air(
                     // TODO: remove external_body from FunctionAttrsX; it was only needed here
                     expr
                 };
-                let axiom = mk_unnamed_axiom(fuel_imply);
+                // let axiom = mk_unnamed_axiom(fuel_imply);
+                let axiom = Arc::new(DeclX::Axiom(Axiom {
+                    named: Some(fun_to_air_ident(&function.x.name)),
+                    expr: fuel_imply,
+                }));
                 decl_commands.push(Arc::new(CommandX::Global(axiom)));
             }
         }

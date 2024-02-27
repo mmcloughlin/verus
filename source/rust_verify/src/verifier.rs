@@ -15,7 +15,8 @@ use rustc_hir::OwnerNode;
 use rustc_interface::interface::Compiler;
 
 use vir::messages::{
-    message, note, note_bare, warning_bare, Message, MessageLabel, MessageLevel, MessageX, ToAny,
+    message, note, note_bare, warning, warning_bare, Message, MessageLabel, MessageLevel, MessageX,
+    ToAny,
 };
 
 use num_format::{Locale, ToFormattedString};
@@ -501,7 +502,7 @@ impl Verifier {
     /// to validate user code.
     fn check_internal_result(result: ValidityResult) {
         match result {
-            ValidityResult::Valid => {}
+            ValidityResult::Valid(air::context::UsageInfo::None) => {}
             ValidityResult::TypeError(err) => {
                 panic!("internal error: ill-typed AIR code: {}", err)
             }
@@ -704,11 +705,26 @@ impl Verifier {
         let mut timed_out = false;
         loop {
             match result {
-                ValidityResult::Valid => {
+                ValidityResult::Valid(usage_info) => {
                     if (is_check_valid && is_first_check && level == Some(MessageLevel::Error))
                         || is_singular
                     {
                         self.count_verified += 1;
+
+                        if let air::context::UsageInfo::UsedAxioms(axioms) = usage_info {
+                            if axioms.len() > 0 {
+                                let axioms_list = axioms
+                                    .iter()
+                                    .map(|x| (**x).clone())
+                                    .collect::<Vec<String>>()
+                                    .join(", ");
+                                let msg = format!(
+                                    "{} used these broadcasted lemmas:\n{}",
+                                    context.desc, axioms_list
+                                );
+                                reporter.report(&warning(&context.span, msg).to_any());
+                            }
+                        }
                     }
                     break;
                 }
