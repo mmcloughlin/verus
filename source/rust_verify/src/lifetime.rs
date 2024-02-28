@@ -297,7 +297,7 @@ impl rustc_driver::Callbacks for LifetimeCallbacks {
         config.override_queries = Some(|_session, providers, _| {
             providers.mir_promoted = |tcx, def_id| {
                 let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_promoted)(tcx, def_id);
-                // dbg!(&def_id, &result.0.borrow());
+                ldbg!(&def_id, &result.0.borrow());
                 result
             };
         });
