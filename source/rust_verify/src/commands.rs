@@ -1,5 +1,6 @@
 use crate::buckets::Bucket;
 use crate::expand_errors_driver::{ExpandErrorsDriver, ExpandErrorsResult};
+use crate::spans::SpanContext;
 use air::ast::{AssertId, Command};
 use air::messages::Diagnostics;
 use std::collections::HashMap;
@@ -77,6 +78,7 @@ pub struct OpGenerator<'a, D: Diagnostics> {
     trait_impl_map: HashMap<Path, TraitImpl>,
 
     scc_idx: usize,
+    source_map: &'a rustc_span::source_map::SourceMap,
 }
 
 pub struct FunctionOpGenerator<'a: 'b, 'b, D: Diagnostics> {
@@ -86,11 +88,12 @@ pub struct FunctionOpGenerator<'a: 'b, 'b, D: Diagnostics> {
 }
 
 impl<'a, D: Diagnostics> OpGenerator<'a, D> {
-    pub fn new(
+    pub(crate) fn new(
         ctx: &'a mut vir::context::Ctx,
         krate: &Krate,
         reporter: &'a D,
         bucket: Bucket,
+        source_map: &rustc_span::source_map::SourceMap,
     ) -> Self {
         let mut func_map: HashMap<Fun, (Function, Visibility)> = HashMap::new();
         let module = ctx.module();
@@ -127,6 +130,7 @@ impl<'a, D: Diagnostics> OpGenerator<'a, D> {
             reporter,
             sst_map: UpdateCell::new(HashMap::new()),
             scc_idx: 0,
+            source_map,
         }
     }
 
@@ -387,7 +391,7 @@ impl<'a, 'b, D: Diagnostics> FunctionOpGenerator<'a, 'b, D> {
         match driver.get_current() {
             None => {
                 // It's done
-                let output = driver.get_output_as_message(&self.op_generator.ctx);
+                let output = driver.get_output_as_message(&self.op_generator.ctx, todo!());
                 self.expand_errors_driver = None;
                 return Some(Err(output));
             }

@@ -9,6 +9,7 @@ use vir::func_to_air::FunctionSst;
 use vir::func_to_air::SstMap;
 use vir::sst::{AssertId, Exp};
 
+
 const MAX_FAILURES: u64 = 4;
 const MAX_DEPTH: usize = 7;
 
@@ -357,7 +358,7 @@ impl ExpandErrorsDriver {
     /// Get the String to display to the user.
     /// This is mostly serializing self.output and annotating some
     /// lines with a query result.
-    pub fn get_output(&self, ctx: &Ctx) -> String {
+    pub(crate) fn get_output(&self, ctx: &Ctx, source_map: &rustc_span::source_map::SourceMap) -> String {
         let mut group_bars: Vec<usize> = vec![];
         fn close_up_group_bars(b: &mut Vec<String>, group_bars: &mut Vec<usize>, indent: u64) {
             while group_bars.len() > 0 {
@@ -385,6 +386,11 @@ impl ExpandErrorsDriver {
         }
 
         let mut b: Vec<String> = vec!["Diagnostics via iterative expansion:\n".into()];
+        
+        fn to_user_string(ctx: &vir::context::GlobalCtx, source_map: &rustc_span::source_map::SourceMap, e: &Exp) -> String {
+            // let s = crate::spans::from_raw_span(&e.span.raw_span)?;
+            todo!()
+        }
 
         for (i, line) in self.output.iter().enumerate() {
             close_up_group_bars(&mut b, &mut group_bars, line.indent);
@@ -394,10 +400,10 @@ impl ExpandErrorsDriver {
                     let style = self.get_line_style(i);
                     let l = match intro {
                         Introduction::UnfoldFunctionDef(_fun, exp) => {
-                            vec![format!("{}", exp.x.to_user_string(&ctx.global))]
+                            vec![format!("{}", to_user_string(&ctx.global, source_map, exp))]
                         }
                         Introduction::SplitEquality(exp) => {
-                            vec![format!("{}", exp.x.to_user_string(&ctx.global))]
+                            vec![format!("{}", to_user_string(&ctx.global, source_map, exp))]
                         }
                         Introduction::Let(binders) => {
                             let mut w = vec![];
@@ -410,7 +416,7 @@ impl ExpandErrorsDriver {
                                 v.push("let ".into());
                                 v.push((*binder.name.0).clone());
                                 v.push(" = ".into());
-                                v.push(binder.a.x.to_user_string(&ctx.global));
+                                v.push(to_user_string(&ctx.global, source_map, &binder.a));
                                 v.push(";".into());
                                 w.push(v.join(""));
                             }
@@ -429,7 +435,7 @@ impl ExpandErrorsDriver {
                             vec![v.join("")]
                         }
                         Introduction::Hypothesis(exp) => {
-                            vec![format!("{} ==>", exp.x.to_user_string(&ctx.global))]
+                            vec![format!("{} ==>", to_user_string(&ctx.global, source_map, exp))]
                         }
                     };
                     (l, style)
@@ -448,7 +454,7 @@ impl ExpandErrorsDriver {
                         }
                         Some(ExpandErrorsResult::Pass) => ("✔", Style::SuccessGreen),
                     };
-                    let line = format!("{} {}", exp.x.to_user_string(&ctx.global), status);
+                    let line = format!("{} {}", to_user_string(&ctx.global, source_map, exp), status);
                     (vec![line], style)
                 }
                 LineKind::Explanation(explanation) => (vec![explanation.clone()], Style::FailRed),
@@ -542,8 +548,8 @@ impl ExpandErrorsDriver {
         true
     }
 
-    pub fn get_output_as_message(&self, ctx: &Ctx) -> air::messages::ArcDynMessage {
-        let mut s = self.get_output(ctx);
+    pub(crate) fn get_output_as_message(&self, ctx: &Ctx, source_map: &rustc_span::source_map::SourceMap) -> air::messages::ArcDynMessage {
+        let mut s = self.get_output(ctx, source_map);
 
         if self.has_strange_result() {
             s += r###"

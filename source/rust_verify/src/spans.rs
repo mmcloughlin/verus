@@ -18,6 +18,19 @@ pub(crate) fn from_raw_span(raw_span: &vir::messages::RawSpan) -> Option<Span> {
     x.downcast_ref::<SpanData>().map(|data| data.span())
 }
 
+// pub(crate) fn from_span_to_compact_span_str(source_map: &SourceMap, span: &vir::messages::Span) -> Option<String> {
+//     let s = from_raw_span(&span.raw_span)?;
+// 
+//     dbg!(&s);
+//     let data = s.data();
+//     todo!()
+// }
+// 
+// pub(crate) fn from_span_to_snippet(source_map: &SourceMap, span: &vir::messages::Span) -> Option<String> {
+//     let s = from_raw_span(&span.raw_span)?;
+//     source_map.span_to_snippet(s).ok()
+// }
+
 // Note: this produces a span suitable for reporting immediate errors;
 // It should not be used to construct VIR AST node spans,
 // and cannot be serialized an deserialized.

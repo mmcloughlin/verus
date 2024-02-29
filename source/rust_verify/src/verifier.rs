@@ -603,7 +603,7 @@ impl Verifier {
         &mut self,
         bucket_id: &BucketId,
         reporter: &impl Diagnostics,
-        source_map: Option<&SourceMap>,
+        source_map: &SourceMap,
         diagnostics_to_report: &std::cell::RefCell<Option<PanicOnDropVec<(Message, MessageLevel)>>>,
         level: Option<MessageLevel>,
         air_context: &mut air::context::Context,
@@ -774,17 +774,9 @@ impl Verifier {
                         }
 
                         if self.args.debugger {
-                            if let Some(source_map) = source_map {
-                                let mut debugger =
-                                    Debugger::new(air_model, assign_map, snap_map, source_map);
-                                debugger.start_shell(air_context);
-                            } else {
-                                reporter.report(&message(
-                                    MessageLevel::Warning,
-                                    "no source map available for debugger. Try running single threaded.",
-                                    &context.span,
-                                ).to_any());
-                            }
+                            let mut debugger =
+                                Debugger::new(air_model, assign_map, snap_map, source_map);
+                            debugger.start_shell(air_context);
                         }
                     }
 
@@ -870,7 +862,7 @@ impl Verifier {
     fn run_commands_queries(
         &mut self,
         reporter: &impl Diagnostics,
-        source_map: Option<&SourceMap>,
+        source_map: &SourceMap,
         level: Option<MessageLevel>,
         diagnostics_to_report: &std::cell::RefCell<Option<PanicOnDropVec<(Message, MessageLevel)>>>,
         air_context: &mut air::context::Context,
@@ -1137,7 +1129,7 @@ impl Verifier {
         &mut self,
         reporter: &impl Diagnostics,
         krate: &Krate,
-        source_map: Option<&SourceMap>,
+        source_map: &SourceMap,
         bucket_id: &BucketId,
         ctx: &mut vir::context::Ctx,
     ) -> Result<(Duration, Duration), VirErr> {
@@ -1251,7 +1243,7 @@ impl Verifier {
         let function_decl_commands = Arc::new(function_decl_commands);
 
         let bucket = self.get_bucket(bucket_id);
-        let mut opgen = OpGenerator::new(ctx, krate, reporter, bucket.clone());
+        let mut opgen = OpGenerator::new(ctx, krate, reporter, bucket.clone(), source_map);
         let mut all_context_ops = vec![];
         while let Some(mut function_opgen) = opgen.next()? {
             let diagnostics_to_report: std::cell::RefCell<
@@ -1665,7 +1657,7 @@ impl Verifier {
         &mut self,
         reporter: &impl Diagnostics,
         krate: &Krate,
-        source_map: Option<&SourceMap>,
+        source_map: &SourceMap,
         bucket_id: &BucketId,
         mut global_ctx: vir::context::GlobalCtx,
     ) -> Result<vir::context::GlobalCtx, VirErr> {
@@ -1861,7 +1853,7 @@ impl Verifier {
 
                 let worker_sender = sender.clone();
                 let worker = std::thread::spawn(move || {
-                    let r = std::panic::catch_unwind(|| {
+                    // let r = std::panic::catch_unwind(|| {
                         let mut completed_tasks: Vec<GlobalCtx> = Vec::new();
                         loop {
                             let mut tq = thread_taskq.lock().unwrap();
@@ -1871,7 +1863,7 @@ impl Verifier {
                                 let res = thread_verifier.verify_bucket_outer(
                                     &reporter,
                                     &thread_krate,
-                                    None,
+                                    &source_map,
                                     &bucket_id,
                                     task,
                                 );
@@ -1886,18 +1878,19 @@ impl Verifier {
                                 break;
                             }
                         }
-                        Ok::<(Verifier, Vec<GlobalCtx>), VirErr>((thread_verifier, completed_tasks))
-                    });
+                    let r =    Ok::<(Verifier, Vec<GlobalCtx>), VirErr>((thread_verifier, completed_tasks));
+                    // });
 
-                    match r {
-                        Ok(x) => x,
-                        Err(e) => {
-                            worker_sender
-                                .send(ReporterMessage::WorkerPanicked(e))
-                                .expect("mpsc open");
-                            panic!("worker thread panicked");
-                        }
-                    }
+                    // match r {
+                    //     Ok(x) => x,
+                    //     Err(e) => {
+                    //         worker_sender
+                    //             .send(ReporterMessage::WorkerPanicked(e))
+                    //             .expect("mpsc open");
+                    //         panic!("worker thread panicked");
+                    //     }
+                    // }
+                    r
                 });
                 workers.push(worker);
             }
@@ -2202,7 +2195,7 @@ impl Verifier {
                 global_ctx = self.verify_bucket_outer(
                     &reporter,
                     &krate,
-                    Some(source_map),
+                    source_map,
                     bucket_id,
                     global_ctx,
                 )?;
