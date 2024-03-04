@@ -888,6 +888,8 @@ pub struct FunctionAttrsX {
     pub print_zero_args: bool,
     /// is this a method, i.e., written with x.f() syntax? useful for printing
     pub print_as_method: bool,
+    /// broadcast proof from size_of global
+    pub size_of_broadcast_proof: bool,
 }
 
 /// Function specification of its invariant mask
