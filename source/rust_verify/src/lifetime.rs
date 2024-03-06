@@ -120,6 +120,7 @@ use crate::verus_items::VerusItems;
 use rustc_hir::{AssocItemKind, Crate, ItemKind, MaybeOwner, OwnerNode};
 use rustc_middle::mir::BorrowCheckResult;
 use rustc_middle::ty::TyCtxt;
+use rustc_query_system::dep_graph::DepNodeParams;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Write;
@@ -296,9 +297,27 @@ impl rustc_driver::Callbacks for LifetimeCallbacks {
     // TODO(&mut)
     fn config(&mut self, config: &mut rustc_interface::Config) {
         config.override_queries = Some(|_session, providers, _| {
+            providers.mir_built = |tcx, def_id| {
+                let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_built)(tcx, def_id);
+                if def_id.to_debug_str(tcx).contains("user_function") {
+                    ldbg!(&def_id, &result);
+                }
+                result
+            };
+
             providers.mir_promoted = |tcx, def_id| {
                 let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_promoted)(tcx, def_id);
-                ldbg!(&def_id, &result.0.borrow());
+                if def_id.to_debug_str(tcx).contains("user_function") {
+                    ldbg!(&def_id, &result.0.borrow(), &result.1.borrow());
+                }
+                result
+            };
+            
+            providers.mir_borrowck = |tcx, def_id| {
+                let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_borrowck)(tcx, def_id);
+                if def_id.to_debug_str(tcx).contains("user_function") {
+                    ldbg!(&def_id, &result);
+                }
                 result
             };
         });
