@@ -15,12 +15,12 @@ use crate::inv_masks::MaskSet;
 use crate::messages::{error, Span};
 use crate::scc::Graph;
 use crate::sst::{
-    BndX, CallFun, Dest, Exp, ExpX, Exps, InternalFun, LocalDecl, LocalDeclX, Stm, StmX,
+    BndX, CallFun, Dest, Exp, ExpX, Exps, InternalFun, LocalDecl, LocalDeclX, Stm, StmX, Trigs,
     UniqueIdent,
 };
 use crate::sst_to_air::PostConditionKind;
 use crate::sst_to_air::PostConditionSst;
-use crate::sst_visitor::{exp_rename_vars, map_exp_visitor, map_stm_visitor};
+use crate::sst_visitor::{exp_rename_vars, map_stm_visitor, NoScoper, Rewrite, Visitor};
 use crate::util::vec_map_result;
 use air::ast_util::str_typ;
 use air::messages::Diagnostics;
@@ -246,28 +246,40 @@ pub(crate) fn rewrite_recursive_fun_with_fueled_rec_call(
     if num_decreases == 0 {
         return Err(error(&function.span, "recursive function must have a decreases clause"));
     }
-    let ctxt = Ctxt {
+    let mut ctxt = Ctxt {
         recursive_function_name: function.x.name.clone(),
         num_decreases,
         scc_rep: scc_rep.clone(),
         ctx,
     };
 
-    // New body: substitute rec%f(args, fuel) for f(args)
-    let body = map_exp_visitor(&body, &mut |exp| match &exp.x {
-        ExpX::Call(CallFun::Fun(x, resolved_method), typs, args)
-            if is_recursive_call(&ctxt, x, resolved_method) && ctx.func_map[x].x.body.is_some() =>
-        {
-            let mut args = (**args).clone();
-            let varx = ExpX::Var(unique_local(&&air_unique_var(FUEL_PARAM)));
-            let var_typ = Arc::new(TypX::Air(str_typ(FUEL_TYPE)));
-            args.push(SpannedTyped::new(&exp.span, &var_typ, varx));
-            let callx = ExpX::Call(CallFun::Recursive(x.clone()), typs.clone(), Arc::new(args));
-            SpannedTyped::new(&exp.span, &exp.typ, callx)
+    impl<'a> Visitor<Rewrite, VirErr, NoScoper> for Ctxt<'a> {
+        fn visit_triggers(&mut self, triggers: &Trigs) -> Result<Trigs, VirErr> {
+            // Triggers should refer to the original recursive function name,
+            // not the rewritten fuel-based function.
+            Ok(triggers.clone())
         }
-        _ => exp.clone(),
-    });
 
+        fn visit_exp(&mut self, exp: &Exp) -> Result<Exp, VirErr> {
+            let exp = self.visit_exp_rec(exp)?;
+            match &exp.x {
+                ExpX::Call(CallFun::Fun(x, resolved_method), typs, args)
+                    if is_recursive_call(&self, x, resolved_method) && self.ctx.func_map[x].x.body.is_some() =>
+                {
+                    let mut args = (**args).clone();
+                    let varx = ExpX::Var(unique_local(&&air_unique_var(FUEL_PARAM)));
+                    let var_typ = Arc::new(TypX::Air(str_typ(FUEL_TYPE)));
+                    args.push(SpannedTyped::new(&exp.span, &var_typ, varx));
+                    let callx = ExpX::Call(CallFun::Recursive(x.clone()), typs.clone(), Arc::new(args));
+                    Ok(SpannedTyped::new(&exp.span, &exp.typ, callx))
+                }
+                _ => Ok(exp.clone()),
+            }
+        }
+    }
+
+    // New body: substitute rec%f(args, fuel) for f(args)
+    let body = ctxt.visit_exp(&body)?;
     Ok((true, body, scc_rep))
 }
 

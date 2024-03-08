@@ -13,7 +13,7 @@ pub(crate) trait Scoper {
     fn insert_binding_exp(&mut self, _binder: &VarBinder<Exp>, _bnd_source: &Bnd) {}
 }
 
-struct NoScoper;
+pub(crate) struct NoScoper;
 impl Scoper for NoScoper {}
 
 pub type VisitorScopeMap = ScopeMap<VarIdent, bool>;
