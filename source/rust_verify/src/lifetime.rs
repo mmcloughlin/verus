@@ -119,9 +119,12 @@ use crate::util::error;
 use crate::verus_items::VerusItems;
 use rustc_hir::{AssocItemKind, Crate, ItemKind, MaybeOwner, OwnerNode};
 use rustc_middle::mir::BorrowCheckResult;
+use rustc_middle::mir::HasLocalDecls;
+use rustc_middle::mir::VarBindingForm;
 use rustc_middle::ty::TyCtxt;
 use rustc_query_system::dep_graph::DepNodeParams;
-use serde::Deserialize;
+use rustc_span::Symbol;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use vir::ast::VirErr;
@@ -166,6 +169,20 @@ macro_rules! ldbg {
     };
     ($($val:expr),+ $(,)?) => {
         ($(ldbg!($val)),+,)
+    };
+}
+
+#[macro_export]
+macro_rules! leprintln {
+    ($val:expr) => {
+        match $val {
+            tmp => {
+                let __string =
+                    ::std::format!("[lifetime {}:{}] = {}", ::std::file!(), ::std::line!(), &tmp);
+                ::std::eprintln!("{}", $crate::lifetime::ldbg_prefix_all_lines(__string));
+                tmp
+            }
+        }
     };
 }
 
@@ -214,6 +231,7 @@ pub(crate) fn check<'tcx>(queries: &'tcx rustc_interface::Queries<'tcx>) {
 
 const PRELUDE: &str = "\
 #![feature(box_patterns)]
+#![feature(rustc_attrs)]
 #![allow(non_camel_case_types)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
@@ -226,11 +244,13 @@ const PRELUDE: &str = "\
 #![allow(unconditional_recursion)]
 #![allow(unused_mut)]
 #![allow(unused_labels)]
+#![allow(internal_features)]
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::Arc;
 fn op<A, B>(a: A) -> B { panic!() }
-fn resolve<A>(a: &mut A) { panic!() }
+#[rustc_diagnostic_item = \"verus::lifetime::resolve\"]
+fn resolve<A>(a: A) { panic!() }
 fn static_ref<T>(t: T) -> &'static T { panic!() }
 fn tracked_new<T>(t: T) -> Tracked<T> { panic!() }
 fn tracked_exec_borrow<'a, T>(t: &'a T) -> &'a Tracked<T> { panic!() }
@@ -297,27 +317,214 @@ impl rustc_driver::Callbacks for LifetimeCallbacks {
     // TODO(&mut)
     fn config(&mut self, config: &mut rustc_interface::Config) {
         config.override_queries = Some(|_session, providers, _| {
-            providers.mir_built = |tcx, def_id| {
-                let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_built)(tcx, def_id);
-                if def_id.to_debug_str(tcx).contains("user_function") {
-                    ldbg!(&def_id, &result);
-                }
-                result
-            };
-
-            providers.mir_promoted = |tcx, def_id| {
-                let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_promoted)(tcx, def_id);
-                if def_id.to_debug_str(tcx).contains("user_function") {
-                    ldbg!(&def_id, &result.0.borrow(), &result.1.borrow());
-                }
-                result
-            };
-            
             providers.mir_borrowck = |tcx, def_id| {
                 let result = (rustc_interface::DEFAULT_QUERY_PROVIDERS.mir_borrowck)(tcx, def_id);
-                if def_id.to_debug_str(tcx).contains("user_function") {
-                    ldbg!(&def_id, &result);
+                // ldbg!(&def_id, &result);
+
+                let opts = rustc_borrowck::consumers::ConsumerOptions::RegionInferenceContext;
+
+                let body_with_facts =
+                    rustc_borrowck::consumers::get_body_with_borrowck_facts(tcx, def_id, opts);
+
+                let body = &body_with_facts.body;
+                // for (i, d) in body.local_decls.iter().enumerate() {
+                //     if false {
+                //         if let (_, rustc_type_ir::TyKind::Ref(region, inner_ty, rustc_ast::Mutability::Mut)) = (d.is_user_variable(), d.ty.kind()) {
+                //             ldbg!(&(i, &d.local_info, &region));
+                //         }
+                //     }
+                //     leprintln!(format!("_{} {:?}", i, &d.local_info));
+                // }
+                // ldbg!(&body);
+                let borrow_set = &body_with_facts.borrow_set;
+                // ldbg!(&body_with_facts.borrow_set.location_map);
+                let borrows_out_of_scope =
+                    rustc_borrowck::consumers::calculate_borrows_out_of_scope_at_location(
+                        &body_with_facts.body,
+                        &body_with_facts.region_inference_context,
+                        &borrow_set,
+                    );
+                // ldbg!(&borrows_out_of_scope);
+                let mut resolved_at = std::collections::HashSet::new();
+                for (bb, bbd) in rustc_middle::mir::traversal::reachable(&body) {
+                    if let Some(terminator) = &bbd.terminator {
+                        match &terminator.kind {
+                            rustc_middle::mir::TerminatorKind::Call {
+                                func,
+                                args,
+                                destination,
+                                target,
+                                unwind,
+                                call_source,
+                                fn_span,
+                            } => {
+                                if let rustc_middle::ty::TyKind::FnDef(fn_def_id, _) =
+                                    func.ty(&body.local_decls, tcx).kind()
+                                {
+                                    if tcx.is_diagnostic_item(
+                                        Symbol::intern("verus::lifetime::resolve"),
+                                        *fn_def_id,
+                                    ) {
+                                        let rustc_middle::mir::Operand::Move(resolve_place) =
+                                            &args[0]
+                                        else {
+                                            panic!("invalid resolve");
+                                        };
+                                        if let Some(target) = target {
+                                            for (i, s) in
+                                                body[*target].statements.iter().enumerate()
+                                            {
+                                                if matches!(s.kind, rustc_middle::mir::StatementKind::StorageDead(p) if p == resolve_place.local)
+                                                {
+                                                    let loc = rustc_middle::mir::Location {
+                                                        block: *target,
+                                                        statement_index: i,
+                                                    };
+                                                    resolved_at.insert(loc);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
                 }
+                // ldbg!(&resolved_at);
+                for (i, bw) in body_with_facts.borrow_set.location_map.iter().enumerate() {
+                    let local_span =
+                        body.local_decls[bw.1.borrowed_place.local].source_info.span;
+                    let borrowed_local_info = &**body.local_decls[bw.1.borrowed_place.local]
+                        .local_info
+                        .as_ref()
+                        .assert_crate_local();
+                    if let rustc_middle::mir::LocalInfo::User(local_binding_form) =
+                        &borrowed_local_info
+                    {
+                        // TODO ???
+                        // let mut resolved_immediately = false;
+                        // if !matches!(&bw.1.activation_location, rustc_borrowck::borrow_set::TwoPhaseActivation::ActivatedAt(_)) {
+                        //     for bos in borrows_out_of_scope.iter() {
+                        //         if bos.1.iter().find(|bi| bi.as_usize() == i).is_some() {
+                        //             if bos.0.block == bw.0.block {
+                        //                 resolved_immediately = true;
+                        //             }
+                        //         }
+                        //     }
+                        // }
+                        // if !resolved_immediately {
+                        // if !matches!(&bw.1.activation_location, rustc_borrowck::borrow_set::TwoPhaseActivation::ActivatedAt(_)) {
+                        let out_of_scope_at: Vec<_> = borrows_out_of_scope
+                            .iter()
+                            .filter_map(|bos| {
+                                bos.1.iter().find(|bi| bi.as_usize() == i).map(|_| bos.0)
+                            })
+                            .filter(|loc| !body[loc.block].is_cleanup)
+                            .collect();
+                        fn span_to_diagnostic_span(
+                            tcx: TyCtxt<'_>,
+                            span: rustc_span::Span,
+                        ) -> DiagnosticSpan {
+                            let lo = tcx.sess.source_map().lookup_char_pos(span.lo());
+                            let hi = tcx.sess.source_map().lookup_char_pos(span.hi());
+                            DiagnosticSpan {
+                                line_start: lo.line,
+                                column_start: lo.col.0,
+                                line_end: hi.line,
+                                column_end: hi.col.0,
+                            }
+                        }
+                        for loc in out_of_scope_at.iter() {
+                            if loc.block != bw.0.block && !resolved_at.contains(loc) {
+                                // ldbg!(&(
+                                //     format!("NOT RESOLVED: bw{}", i),
+                                //     bw,
+                                //     bw.1.borrowed_place.local,
+                                //     borrowed_local_info,
+                                //     bw.1.region,
+                                //     &out_of_scope_at
+                                // ));
+                                let mut spans = vec![span_to_diagnostic_span(tcx, local_span)];
+                                if let Some(terminator) =
+                                    &body[bw.1.reserve_location.block].terminator
+                                {
+                                    spans.push(span_to_diagnostic_span(
+                                        tcx,
+                                        terminator.source_info.span,
+                                    ));
+                                }
+                                // TODO? match local_binding_form {
+                                // TODO?     rustc_middle::mir::BindingForm::Var(VarBindingForm { opt_match_place: Some((_, var_span)), .. }) => {
+                                // TODO?     }
+                                // TODO?     rustc_middle::mir::BindingForm::ImplicitSelf(_) => {
+                                // TODO?         // TODO emit a span for self?
+                                // TODO?     }
+                                // TODO?     _ => (),
+                                // TODO? }
+                                let d = Diagnostic {
+                                    message: format!(
+                                        "a mutable borrow that lives more than a single statement was not explicitly resolved"
+                                    ),
+                                    level: format!("error"),
+                                    spans,
+                                };
+                                eprintln!(
+                                    "{}",
+                                    serde_json::to_string(&d)
+                                        .expect("cannot serialize resolve diagnostic")
+                                );
+                            }
+                        }
+                        // }
+                        // }
+                    }
+                }
+                // match &body_with_facts.borrow_set.locals_state_at_exit {
+                //     rustc_borrowck::borrow_set::LocalsStateAtExit::AllAreInvalidated => {},
+                //     rustc_borrowck::borrow_set::LocalsStateAtExit::SomeAreInvalidated { has_storage_dead_or_moved } => {
+                //         ldbg!(&has_storage_dead_or_moved);
+                //     }
+                // }
+                // ldbg!(&body.basic_blocks);
+                if false {
+                    let mir_pretty = {
+                        let mut s: Vec<u8> = Vec::new();
+                        let w: &mut dyn Write = &mut s;
+                        rustc_middle::mir::pretty::write_mir_fn(
+                            tcx,
+                            body,
+                            &mut |_, _| Ok(()),
+                            w,
+                        )
+                        .expect("error pretty mir");
+                        String::from_utf8(s).expect("invalid utf8")
+                    };
+                    leprintln!(&mir_pretty);
+                }
+
+                if false {
+                    let mut debug_output = String::new();
+                    use std::fmt::Write;
+                    writeln!(&mut debug_output, "maybe_live");
+
+                    for (bb, bbd) in rustc_middle::mir::traversal::reachable(&body) {
+                        if bbd.is_cleanup {
+                            writeln!(&mut debug_output, "{:?} (cleanup)", &bb);
+                            continue;
+                        }
+                        writeln!(&mut debug_output, "{:?}", &bb);
+                        let mut loc = bb.start_location();
+                        for (s, statement) in bbd.statements.iter().enumerate() {
+                            writeln!(&mut debug_output, "    [{}] {:?}", &s, &statement);
+                            loc = loc.successor_within_block();
+                        }
+                        writeln!(&mut debug_output, "    {:?}", &bbd.terminator().kind);
+                    }
+
+                    leprintln!(&debug_output);
+                }
+
                 result
             };
         });
@@ -357,7 +564,7 @@ impl rustc_span::source_map::FileLoader for LifetimeFileLoader {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DiagnosticSpan {
     line_start: usize,
     line_end: usize,
@@ -365,7 +572,7 @@ struct DiagnosticSpan {
     column_end: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Diagnostic {
     message: String,
     level: String,

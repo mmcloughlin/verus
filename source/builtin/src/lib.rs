@@ -1287,7 +1287,7 @@ pub fn is_smaller_than_recursive_function_field<A, B>(_: A, _: B) -> bool {
 
 // TODO(&mut) #[cfg(verus_keep_ghost)]
 #[rustc_diagnostic_item = "verus::builtin::resolve"]
-pub fn resolve<A>(_: &mut A) {
+pub fn resolve<A>(_: A) {
     unimplemented!();
 }
 
