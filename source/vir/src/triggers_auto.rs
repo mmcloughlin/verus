@@ -297,12 +297,19 @@ fn gather_terms(ctxt: &mut Ctxt, ctx: &Ctx, exp: &Exp, depth: u64) -> (bool, Ter
             }
             all_terms.extend(terms);
             match x {
-                CallFun::Fun(x, _) => match ctx.func_map.get(x) {
-                    Some(f) if f.x.attrs.no_auto_trigger => {
+                CallFun::Fun(x, resolved) => {
+                    let is_recursive = if let Some(c) = crate::recursion::current_fun_ctxt(ctx) {
+                        crate::recursion::is_recursive_call(&c, x, resolved)
+                    } else {
+                        false
+                    };
+                    let f = &ctx.func_map[x];
+                    if f.x.attrs.no_auto_trigger || is_recursive {
                         (false, Arc::new(TermX::App(ctxt.other(), Arc::new(all_terms))))
+                    } else {
+                        (is_pure, Arc::new(TermX::App(App::Call(x.clone()), Arc::new(all_terms))))
                     }
-                    _ => (is_pure, Arc::new(TermX::App(App::Call(x.clone()), Arc::new(all_terms)))),
-                },
+                }
                 CallFun::Recursive(_) => panic!("internal error: CheckTermination"),
                 CallFun::InternalFun(_) => {
                     (is_pure, Arc::new(TermX::App(ctxt.other(), Arc::new(all_terms))))

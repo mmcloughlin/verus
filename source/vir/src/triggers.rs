@@ -180,6 +180,7 @@ fn check_trigger_expr_args(state: &State, expect_boxed: bool, args: &Exps) -> Re
 }
 
 fn check_trigger_expr(
+    ctx: &Ctx,
     state: &State,
     exp: &Exp,
     free_vars: &mut HashSet<VarIdent>,
@@ -225,7 +226,33 @@ fn check_trigger_expr(
             }
             ExpX::Loc(..) | ExpX::VarLoc(..) => Ok(()),
             ExpX::ExecFnByName(..) => Ok(()),
-            ExpX::Call(_, typs, args) => {
+            ExpX::Call(f, typs, args) => {
+                if let Some(ctxt) = crate::recursion::current_fun_ctxt(ctx) {
+                    if let crate::sst::CallFun::Fun(target, resolved) = f {
+                        if crate::recursion::is_recursive_call(&ctxt, target, resolved) {
+                            // Defining a function like:
+                            // spec fn f(i: int, j: int) -> bool decreases i {
+                            //     i > 0 ==> (forall|j: int| #[trigger] f(pred(i), j))
+                            // }
+                            // results in basic equalities failing, such as:
+                            //   f(i, j) == (i > 0 ==> (forall|j: int| #[trigger] f(pred(i), j)))
+                            // (in Verus, Dafny, and F* at least)
+                            // Using a separate artificial trigger results in better-behaved
+                            // definitions.
+                            // See https://github.com/verus-lang/verus/issues/608
+                            let msg = "Triggers inside a function body cannot contain recursive \
+                                calls to the function itself, because such triggers do not work \
+                                properly with the standard fuel-based encoding of recursive calls. \
+                                (This is true not just for Verus, but for similar SMT-based tools.) \
+                                If no other triggers are convenient, consider declaring a separate \
+                                dummy function to use as an artificial trigger.  Example: \
+                                declare `spec fn t(i: int) -> bool { true }` \
+                                and then say `forall|i: int| #[trigger] t(i) ==> ...` \
+                                or `exists|i: int| #[trigger] t(i) && ...`.";
+                            return Err(error(&exp.span, msg));
+                        }
+                    }
+                }
                 for typ in typs.iter() {
                     crate::ast_visitor::map_typ_visitor_env(typ, free_vars, &ft).unwrap();
                 }
@@ -314,7 +341,7 @@ fn check_trigger_expr(
     )
 }
 
-fn get_manual_triggers(state: &mut State, exp: &Exp) -> Result<(), VirErr> {
+fn get_manual_triggers(ctx: &Ctx, state: &mut State, exp: &Exp) -> Result<(), VirErr> {
     let mut map: ScopeMap<VarIdent, bool> = ScopeMap::new();
     let mut lets: HashSet<VarIdent> = HashSet::new();
     map.push_scope(false);
@@ -339,7 +366,7 @@ fn get_manual_triggers(state: &mut State, exp: &Exp) -> Result<(), VirErr> {
             ExpX::Unary(UnaryOp::Trigger(TriggerAnnotation::Trigger(group)), e1) => {
                 let mut free_vars: HashSet<VarIdent> = HashSet::new();
                 let e1 = preprocess_exp(&e1);
-                check_trigger_expr(state, &e1, &mut free_vars, &lets)?;
+                check_trigger_expr(ctx, state, &e1, &mut free_vars, &lets)?;
                 for x in &free_vars {
                     if map.get(x) == Some(&true) && !state.trigger_vars.contains_key(x) {
                         // If the trigger contains variables declared by a nested quantifier,
@@ -367,7 +394,7 @@ fn get_manual_triggers(state: &mut State, exp: &Exp) -> Result<(), VirErr> {
                         let es: Vec<Exp> = trigger.iter().map(preprocess_exp).collect();
                         for e in &es {
                             let mut free_vars: HashSet<VarIdent> = HashSet::new();
-                            check_trigger_expr(state, e, &mut free_vars, &lets)?;
+                            check_trigger_expr(ctx, state, e, &mut free_vars, &lets)?;
                             for x in free_vars {
                                 if state.trigger_vars.contains_key(&x) {
                                     coverage.insert(x);
@@ -420,7 +447,7 @@ pub(crate) fn build_triggers(
         triggers: BTreeMap::new(),
         coverage: HashMap::new(),
     };
-    get_manual_triggers(&mut state, exp)?;
+    get_manual_triggers(ctx, &mut state, exp)?;
     if state.triggers.len() > 0 || allow_empty {
         if state.auto_trigger != AutoType::None {
             return Err(error(

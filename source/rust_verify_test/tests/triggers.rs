@@ -290,6 +290,43 @@ test_verify_one_file! {
 }
 
 test_verify_one_file! {
+    #[test] test_no_auto_recursive_trigger verus_code! {
+        spec fn pred(i: int) -> int { i - 1 }
+        spec fn f(i: int, j: int) -> bool
+            decreases i
+        {
+            i > 0 ==> (forall|j: int| f(pred(i), j))
+        }
+    } => Err(err) => assert_vir_error_msg(err, "Could not automatically infer triggers")
+}
+
+test_verify_one_file! {
+    #[test] test_no_manual_recursive_trigger verus_code! {
+        spec fn pred(i: int) -> int { i - 1 }
+        spec fn f(i: int, j: int) -> bool
+            decreases i
+        {
+            i > 0 ==> (forall|j: int| #[trigger] f(pred(i), j))
+        }
+    } => Err(err) => assert_vir_error_msg(err, "Triggers inside a function body cannot contain recursive calls")
+}
+
+test_verify_one_file! {
+    #[test] test_avoid_recursive_trigger verus_code! {
+        spec fn t(i: int) -> bool { true }
+        spec fn pred(i: int) -> int { i - 1 }
+        spec fn f(i: int, j: int) -> bool
+            decreases i
+        {
+            i > 0 ==> (forall|j: int| #[trigger] t(j) ==> f(pred(i), j))
+        }
+        proof fn test(i: int, j: int) {
+            assert(f(i, j) == (i > 0 ==> (forall|j: int| #[trigger] t(j) ==> f(pred(i), j))));
+        }
+    } => Ok(())
+}
+
+test_verify_one_file! {
     #[test] test_trigger_all verus_code! {
         spec fn bar(i: nat) -> bool;
         spec fn baz(i: nat) -> bool;

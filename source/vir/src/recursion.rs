@@ -39,7 +39,7 @@ pub enum Node {
 }
 
 #[derive(Clone)]
-struct Ctxt<'a> {
+pub(crate) struct Ctxt<'a> {
     recursive_function_name: Fun,
     num_decreases: usize,
     scc_rep: Node,
@@ -59,7 +59,11 @@ pub(crate) fn get_callee(
     }
 }
 
-fn is_recursive_call(ctxt: &Ctxt, target: &Fun, resolved_method: &Option<(Fun, Typs)>) -> bool {
+pub(crate) fn is_recursive_call(
+    ctxt: &Ctxt,
+    target: &Fun,
+    resolved_method: &Option<(Fun, Typs)>,
+) -> bool {
     if let Some(callee) = get_callee(ctxt.ctx, target, resolved_method) {
         let callee_node = Node::Fun(callee.clone());
         callee == ctxt.recursive_function_name
@@ -232,26 +236,38 @@ fn mk_decreases_at_entry(
     Ok((decls, stm_assigns))
 }
 
+pub(crate) fn function_ctxt<'a>(ctx: &'a Ctx, function: &Function) -> Ctxt<'a> {
+    let caller_node = Node::Fun(function.x.name.clone());
+    let scc_rep = ctx.global.func_call_graph.get_scc_rep(&caller_node);
+    let num_decreases = function.x.decrease.len();
+    Ctxt {
+        recursive_function_name: function.x.name.clone(),
+        num_decreases,
+        scc_rep: scc_rep.clone(),
+        ctx,
+    }
+}
+
+pub(crate) fn current_fun_ctxt<'a>(ctx: &'a Ctx) -> Option<Ctxt<'a>> {
+    if let Some(fun_ctxt) = &ctx.fun {
+        Some(function_ctxt(ctx, &ctx.func_map[&fun_ctxt.current_fun]))
+    } else {
+        None
+    }
+}
+
 pub(crate) fn rewrite_recursive_fun_with_fueled_rec_call(
     ctx: &Ctx,
     function: &Function,
     body: &Exp,
 ) -> Result<(bool, Exp, crate::recursion::Node), VirErr> {
-    let caller_node = Node::Fun(function.x.name.clone());
-    let scc_rep = ctx.global.func_call_graph.get_scc_rep(&caller_node);
+    let ctxt = function_ctxt(ctx, function);
     if !fun_is_recursive(ctx, function) {
-        return Ok((false, body.clone(), scc_rep));
+        return Ok((false, body.clone(), ctxt.scc_rep));
     }
-    let num_decreases = function.x.decrease.len();
-    if num_decreases == 0 {
+    if ctxt.num_decreases == 0 {
         return Err(error(&function.span, "recursive function must have a decreases clause"));
     }
-    let ctxt = Ctxt {
-        recursive_function_name: function.x.name.clone(),
-        num_decreases,
-        scc_rep: scc_rep.clone(),
-        ctx,
-    };
 
     // New body: substitute rec%f(args, fuel) for f(args)
     let body = map_exp_visitor(&body, &mut |exp| match &exp.x {
@@ -268,7 +284,7 @@ pub(crate) fn rewrite_recursive_fun_with_fueled_rec_call(
         _ => exp.clone(),
     });
 
-    Ok((true, body, scc_rep))
+    Ok((true, body, ctxt.scc_rep))
 }
 
 pub(crate) fn check_termination_commands(
@@ -332,8 +348,8 @@ fn check_termination<'a>(
     function: &Function,
     body: &Stm,
 ) -> Result<(Ctxt<'a>, Vec<Exp>, Stm), VirErr> {
-    let num_decreases = function.x.decrease.len();
-    if num_decreases == 0 {
+    let ctxt = function_ctxt(ctx, function);
+    if ctxt.num_decreases == 0 {
         return Err(error(&function.span, "recursive function must have a decreases clause"));
     }
 
@@ -347,9 +363,6 @@ fn check_termination<'a>(
             e,
         )
     })?;
-    let scc_rep = ctx.global.func_call_graph.get_scc_rep(&Node::Fun(function.x.name.clone()));
-    let ctxt =
-        Ctxt { recursive_function_name: function.x.name.clone(), num_decreases, scc_rep, ctx };
     let stm = map_stm_visitor(body, &mut |s| match &s.x {
         StmX::Call { fun, resolved_method, args, dest, .. }
             if is_recursive_call(&ctxt, fun, resolved_method) =>
