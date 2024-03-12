@@ -404,6 +404,17 @@ fn verus_item_to_vir<'tcx, 'a>(
                 let header = Arc::new(HeaderExprX::DecreasesWhen(arg));
                 mk_expr(ExprX::Header(header))
             }
+            SpecItem::NoUnwind => {
+                record_spec_fn_no_proof_args(bctx, expr);
+                let header = Arc::new(HeaderExprX::NoUnwind);
+                mk_expr(ExprX::Header(header))
+            }
+            SpecItem::NoUnwindWhen => {
+                record_spec_fn_no_proof_args(bctx, expr);
+                let arg = mk_one_vir_arg(bctx, expr.span, &args)?;
+                let header = Arc::new(HeaderExprX::NoUnwindWhen(arg));
+                mk_expr(ExprX::Header(header))
+            }
             SpecItem::Admit => {
                 record_spec_fn_no_proof_args(bctx, expr);
                 unsupported_err_unless!(args_len == 0, expr.span, "expected admit", args);

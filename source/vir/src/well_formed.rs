@@ -1,7 +1,7 @@
 use crate::ast::{
     CallTarget, CallTargetKind, Datatype, DatatypeTransparency, Expr, ExprX, FieldOpr, Fun,
-    Function, FunctionKind, Krate, MaskSpec, Mode, MultiOp, Path, TypX, UnaryOp, UnaryOpr, VirErr,
-    VirErrAs,
+    Function, FunctionKind, Krate, MaskSpec, Mode, MultiOp, Path, TypX, UnaryOp, UnaryOpr,
+    UnwindSpec, VirErr, VirErrAs,
 };
 use crate::ast_util::{is_visible_to_opt, path_as_friendly_rust_name, referenced_vars_expr};
 use crate::datatype_to_air::is_datatype_transparent;
@@ -465,7 +465,13 @@ fn check_function(
         if !matches!(function.x.mask_spec, MaskSpec::NoSpec) {
             return Err(error(
                 &function.span,
-                "trait method implementation cannot open invariants; this can only be inherited from the trait declaration",
+                "trait method implementation cannot introduce an invariant specification; this can only be inherited from the trait declaration",
+            ));
+        }
+        if !matches!(function.x.unwind_spec, UnwindSpec::Default) {
+            return Err(error(
+                &function.span,
+                "trait method implementation cannot introduct an unwind specification; this can only be inherited from the trait declaration",
             ));
         }
     }
@@ -574,6 +580,17 @@ fn check_function(
         _ => {
             if function.x.mode == Mode::Spec {
                 return Err(error(&function.span, "invariants cannot be opened in spec functions"));
+            }
+        }
+    }
+    match &function.x.unwind_spec {
+        UnwindSpec::Default => {}
+        _ => {
+            if function.x.mode != Mode::Exec {
+                return Err(error(
+                    &function.span,
+                    "an 'unwind' specification can only be given on exec functions",
+                ));
             }
         }
     }
@@ -835,6 +852,20 @@ fn check_function(
                     Place::PreState("opens_invariants clause"),
                 )?;
             }
+        }
+    }
+    match &function.x.unwind_spec {
+        UnwindSpec::Default | UnwindSpec::NoUnwind => {}
+        UnwindSpec::NoUnwindWhen(expr) => {
+            let msg = "unwind clause of public function";
+            let disallow_private_access = Some((&function.x.visibility.restricted_to, msg));
+            check_expr(
+                ctxt,
+                function,
+                expr,
+                disallow_private_access,
+                Place::PreState("opens_invariants clause"),
+            )?;
         }
     }
     for expr in function.x.decrease.iter() {
