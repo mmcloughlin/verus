@@ -462,8 +462,8 @@ pub use crate::verus::{
     GlobalSizeOf, Invariant, InvariantEnsures, InvariantNameSet, InvariantNameSetAny,
     InvariantNameSetList, InvariantNameSetNone, MatchesOpExpr, MatchesOpToken, Mode, ModeExec,
     ModeGhost, ModeProof, ModeSpec, ModeSpecChecked, ModeTracked, Open, OpenRestricted, Publish,
-    Recommends, Requires, RevealHide, SignatureDecreases, SignatureInvariants, Specification,
-    TypeFnSpec, View,
+    Recommends, Requires, RevealHide, SignatureDecreases, SignatureInvariants, SignatureUnwind,
+    Specification, TypeFnSpec, View,
 };
 
 mod gen {

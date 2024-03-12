@@ -5649,6 +5649,11 @@
           "option": {
             "syn": "SignatureInvariants"
           }
+        },
+        "unwind": {
+          "option": {
+            "syn": "SignatureUnwind"
+          }
         }
       }
     },
@@ -5698,6 +5703,29 @@
         },
         "set": {
           "syn": "InvariantNameSet"
+        }
+      }
+    },
+    {
+      "ident": "SignatureUnwind",
+      "features": {
+        "any": []
+      },
+      "fields": {
+        "token": {
+          "token": "NoUnwind"
+        },
+        "when": {
+          "option": {
+            "tuple": [
+              {
+                "token": "When"
+              },
+              {
+                "syn": "Expr"
+              }
+            ]
+          }
         }
       }
     },
@@ -6948,6 +6976,7 @@
     "Mut": "mut",
     "Ne": "!=",
     "NeEq": "!==",
+    "NoUnwind": "no_unwind",
     "Open": "open",
     "OpensInvariants": "opens_invariants",
     "Or": "|",

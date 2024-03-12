@@ -2243,6 +2243,7 @@ impl Clone for Signature {
             ensures: self.ensures.clone(),
             decreases: self.decreases.clone(),
             invariants: self.invariants.clone(),
+            unwind: self.unwind.clone(),
         }
     }
 }
@@ -2262,6 +2263,15 @@ impl Clone for SignatureInvariants {
         SignatureInvariants {
             token: self.token.clone(),
             set: self.set.clone(),
+        }
+    }
+}
+#[cfg_attr(doc_cfg, doc(cfg(feature = "clone-impls")))]
+impl Clone for SignatureUnwind {
+    fn clone(&self) -> Self {
+        SignatureUnwind {
+            token: self.token.clone(),
+            when: self.when.clone(),
         }
     }
 }
