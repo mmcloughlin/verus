@@ -1,15 +1,16 @@
 use crate::ast::{
     Fun, Function, FunctionKind, Ident, Idents, ItemKind, MaskSpec, Mode, Param, ParamX, Params,
-    SpannedTyped, Typ, TypX, Typs, VarBinder, VarBinderX, VarIdent, VirErr,
+    SpannedTyped, Typ, TypX, Typs, UnwindSpec, VarBinder, VarBinderX, VarIdent, VirErr,
 };
 use crate::ast_util::{LowerUniqueVar, QUANT_FORALL};
 use crate::ast_visitor;
 use crate::context::Ctx;
 use crate::def::{
-    new_internal_qid, prefix_ensures, prefix_fuel_id, prefix_fuel_nat, prefix_open_inv,
-    prefix_pre_var, prefix_recursive_fun, prefix_requires, static_name, suffix_global_id,
-    suffix_typ_param_id, suffix_typ_param_ids, unique_local, CommandsWithContext, SnapPos, Spanned,
-    FUEL_BOOL, FUEL_BOOL_DEFAULT, FUEL_PARAM, FUEL_TYPE, SUCC, THIS_PRE_FAILED, ZERO,
+    new_internal_qid, prefix_ensures, prefix_fuel_id, prefix_fuel_nat, prefix_no_unwind_when,
+    prefix_open_inv, prefix_pre_var, prefix_recursive_fun, prefix_requires, static_name,
+    suffix_global_id, suffix_typ_param_id, suffix_typ_param_ids, unique_local, CommandsWithContext,
+    SnapPos, Spanned, FUEL_BOOL, FUEL_BOOL_DEFAULT, FUEL_PARAM, FUEL_TYPE, SUCC, THIS_PRE_FAILED,
+    ZERO,
 };
 use crate::inv_masks::MaskSet;
 use crate::messages::{error, Message, MessageLabel, Span};
@@ -613,6 +614,31 @@ pub fn func_decl_to_air(
         }
     }
 
+    // Unwind spec
+    match &function.x.unwind_spec {
+        UnwindSpec::Default | UnwindSpec::NoUnwind => {}
+        UnwindSpec::NoUnwindWhen(e) => {
+            let req_params = params_to_pre_post_pars(&function.x.params, true);
+            let _ = req_ens_to_air(
+                ctx,
+                diagnostics,
+                fun_ssts,
+                &mut decl_commands,
+                &req_params,
+                &vec![],
+                &vec![e.clone()],
+                &function.x.typ_params,
+                &req_typs,
+                &prefix_no_unwind_when(&fun_to_air_ident(&function.x.name)),
+                &None,
+                function.x.attrs.integer_ring,
+                bool_typ(),
+                None,
+                None,
+            );
+        }
+    }
+
     // Ensures
     let mut ens_typs: Vec<_> = function
         .x
@@ -1022,6 +1048,33 @@ pub fn func_def_to_sst(
         MaskSpec::InvariantOpensExcept(_exprs) => MaskSet::from_list_complement(inv_spec_air_exprs),
     };
 
+    let unwind = match &req_ens_function.x.unwind_spec {
+        UnwindSpec::Default => default_unwind_spec_sst_for_mode(req_ens_function.x.mode),
+        UnwindSpec::NoUnwind => UnwindSst::NoUnwind,
+        UnwindSpec::NoUnwindWhen(e) => {
+            let e_with_req_ens_params = map_expr_rename_vars(e, &req_ens_e_rename)?;
+            let exp = if ctx.checking_spec_preconditions() {
+                let (stms, exp) = crate::ast_to_sst::expr_to_pure_exp_check(
+                    ctx,
+                    &mut state,
+                    &e_with_req_ens_params,
+                )?;
+                req_stms.extend(stms);
+                exp
+            } else {
+                crate::ast_to_sst::expr_to_exp_skip_checks(
+                    ctx,
+                    diagnostics,
+                    &state.fun_ssts,
+                    &req_pars,
+                    &e_with_req_ens_params,
+                )?
+            };
+            let exp = state.finalize_exp(ctx, &state.fun_ssts, &exp)?;
+            UnwindSst::NoUnwindWhen(exp)
+        }
+    };
+
     for e in function.x.decrease.iter() {
         if ctx.checking_spec_preconditions() {
             let stms = crate::ast_to_sst::check_pure_expr(ctx, &mut state, &e)?;
@@ -1122,6 +1175,7 @@ pub fn func_def_to_sst(
                 kind: PostConditionKind::Ensures,
             },
             mask_set,
+            unwind,
             body: stm,
             local_decls: local_decls,
             statics: statics.into_iter().collect(),
@@ -1154,9 +1208,24 @@ pub struct FunctionSst {
     pub reqs: Exps,
     pub post_condition: PostConditionSst,
     pub mask_set: MaskSet, // Actually AIR
+    pub unwind: UnwindSst,
     pub body: Stm,
     pub local_decls: Vec<LocalDecl>,
     pub statics: Vec<Fun>,
+}
+
+#[derive(Clone)]
+pub enum UnwindSst {
+    MayUnwind,
+    NoUnwind,
+    NoUnwindWhen(Exp),
+}
+
+fn default_unwind_spec_sst_for_mode(mode: Mode) -> UnwindSst {
+    match mode {
+        Mode::Exec => UnwindSst::MayUnwind,
+        Mode::Spec | Mode::Proof => UnwindSst::NoUnwind,
+    }
 }
 
 fn map_expr_rename_vars(

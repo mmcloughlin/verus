@@ -10,7 +10,7 @@ use crate::def::{
     decrease_at_entry, rename_rec_param, unique_bound, unique_local, CommandsWithContext, Spanned,
     FUEL_PARAM, FUEL_TYPE,
 };
-use crate::func_to_air::{params_to_pars, FunctionSst, SstMap};
+use crate::func_to_air::{params_to_pars, FunctionSst, SstMap, UnwindSst};
 use crate::inv_masks::MaskSet;
 use crate::messages::{error, Span};
 use crate::scc::Graph;
@@ -324,6 +324,7 @@ pub(crate) fn check_termination_commands(
             statics: vec![],
             reqs: Arc::new(vec![]),
             mask_set: MaskSet::empty(),
+            unwind: UnwindSst::NoUnwind,
         },
         &vec![],
         false,
