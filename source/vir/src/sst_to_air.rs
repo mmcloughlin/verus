@@ -1511,18 +1511,23 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
                 };
                 let error = match &state.unwind {
                     UnwindAir::MayUnwind => unreachable!(),
-                    UnwindAir::NoUnwind(ReasonForNoUnwind::Function) => error(
+                    UnwindAir::NoUnwind(ReasonForNoUnwind::Function) => error_with_label(
                         &stm.span,
                         "cannot show this call will not unwind, in function marked 'no_unwind'",
+                        "this call might unwind",
                     ),
-                    UnwindAir::NoUnwind(ReasonForNoUnwind::OpenInvariant(span)) => error(
-                        &stm.span,
-                        "cannot show this call will not unwind",
-                    )
-                    .secondary_label(span, "unwinding is not allowed in this invariant block"),
-                    UnwindAir::NoUnwindWhen(_e) => error(
+                    UnwindAir::NoUnwind(ReasonForNoUnwind::OpenInvariant(span)) => {
+                        error_with_label(
+                            &stm.span,
+                            "cannot show this call will not unwind",
+                            "this call might unwind",
+                        )
+                        .secondary_label(span, "unwinding is not allowed in this invariant block")
+                    }
+                    UnwindAir::NoUnwindWhen(_e) => error_with_label(
                         &stm.span,
                         "cannot show this call will not unwind, in function marked 'no_unwind'",
+                        "this call might unwind",
                     ),
                 };
                 let error = if let UnwindSpec::NoUnwindWhen(e) = &func.x.unwind_spec {
