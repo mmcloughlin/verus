@@ -401,3 +401,163 @@ test_verify_one_file! {
         }
     } => Err(err) => assert_vir_error_msg(err, "cannot call function with mode exec")
 }
+
+test_verify_one_file! {
+    #[test] specs_on_external_body verus_code! {
+        #[verifier::external_body]
+        fn fn_may_unwind()
+            opens_invariants none
+        {
+        }
+
+        #[verifier::external_body]
+        fn fn_no_unwind()
+            opens_invariants none
+            no_unwind
+        {
+        }
+
+        #[verifier::external_body]
+        fn fn_conditional_unwind(i: u8)
+            opens_invariants none
+            no_unwind when i >= 5
+        {
+        }
+
+        fn test_caller_may_unwind() {
+            fn_may_unwind();
+            fn_no_unwind();
+            fn_conditional_unwind(0);
+            fn_conditional_unwind(20);
+        }
+
+        fn test_caller_no_unwind1()
+            no_unwind
+        {
+            fn_may_unwind(); // FAILS
+        }
+
+        fn test_caller_no_unwind2()
+            no_unwind
+        {
+            fn_conditional_unwind(3); // FAILS
+        }
+
+        fn test_caller_no_unwind3()
+            no_unwind
+        {
+            fn_conditional_unwind(20);
+            fn_no_unwind();
+        }
+
+        fn test_caller_conditional1(j: u8)
+            no_unwind when j >= 10
+        {
+            fn_may_unwind(); // FAILS
+        }
+
+        fn test_caller_conditional2(j: u8)
+            no_unwind when j >= 10
+        {
+            fn_no_unwind();
+        }
+
+        fn test_caller_conditional3(j: u8)
+            no_unwind when j >= 10
+        {
+            fn_conditional_unwind(j);
+        }
+
+        fn test_caller_conditional4(j: u8)
+            no_unwind when j >= 4
+        {
+            fn_conditional_unwind(j); // FAILS
+        }
+    } => Err(err) => assert_fails(err, 4)
+}
+
+test_verify_one_file! {
+    #[test] specs_on_external_fn_specification verus_code! {
+        #[verifier::external]
+        fn fn_may_unwind() { }
+
+        #[verifier::external]
+        fn fn_no_unwind() { }
+
+        #[verifier::external]
+        fn fn_conditional_unwind(i: u8) { }
+
+        #[verifier::external_fn_specification]
+        fn ex_fn_may_unwind()
+            opens_invariants none
+        {
+            fn_may_unwind()
+        }
+
+        #[verifier::external_fn_specification]
+        fn ex_fn_no_unwind()
+            opens_invariants none
+            no_unwind
+        {
+            fn_no_unwind()
+        }
+
+        #[verifier::external_fn_specification]
+        fn ex_fn_conditional_unwind(i: u8)
+            opens_invariants none
+            no_unwind when i >= 5
+        {
+            fn_conditional_unwind(i)
+        }
+
+        fn test_caller_may_unwind() {
+            fn_may_unwind();
+            fn_no_unwind();
+            fn_conditional_unwind(0);
+            fn_conditional_unwind(20);
+        }
+
+        fn test_caller_no_unwind1()
+            no_unwind
+        {
+            fn_may_unwind(); // FAILS
+        }
+
+        fn test_caller_no_unwind2()
+            no_unwind
+        {
+            fn_conditional_unwind(3); // FAILS
+        }
+
+        fn test_caller_no_unwind3()
+            no_unwind
+        {
+            fn_conditional_unwind(20);
+            fn_no_unwind();
+        }
+
+        fn test_caller_conditional1(j: u8)
+            no_unwind when j >= 10
+        {
+            fn_may_unwind(); // FAILS
+        }
+
+        fn test_caller_conditional2(j: u8)
+            no_unwind when j >= 10
+        {
+            fn_no_unwind();
+        }
+
+        fn test_caller_conditional3(j: u8)
+            no_unwind when j >= 10
+        {
+            fn_conditional_unwind(j);
+        }
+
+        fn test_caller_conditional4(j: u8)
+            no_unwind when j >= 4
+        {
+            fn_conditional_unwind(j); // FAILS
+        }
+    } => Err(err) => assert_fails(err, 4)
+}

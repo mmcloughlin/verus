@@ -150,6 +150,7 @@ macro_rules! atomic_common_methods {
                 equal(self.id(), perm.view().patomic),
             ensures equal(perm.view().value, ret),
             opens_invariants none
+            no_unwind
         {
             return self.ato.load(Ordering::SeqCst);
         }
@@ -162,6 +163,7 @@ macro_rules! atomic_common_methods {
                 equal(self.id(), old(perm).view().patomic),
             ensures equal(perm.view().value, v) && equal(self.id(), perm.view().patomic),
             opens_invariants none
+            no_unwind
         {
             self.ato.store(v, Ordering::SeqCst);
         }
@@ -185,6 +187,7 @@ macro_rules! atomic_common_methods {
                         && equal(r, old(perm).view().value),
                 },
             opens_invariants none
+            no_unwind
         {
             match self.ato.compare_exchange(current, new, Ordering::SeqCst, Ordering::SeqCst) {
                 Ok(x) => Result::Ok(x),
@@ -210,6 +213,7 @@ macro_rules! atomic_common_methods {
                         && equal(r, old(perm).view().value),
                 },
             opens_invariants none
+            no_unwind
         {
             match self.ato.compare_exchange_weak(current, new, Ordering::SeqCst, Ordering::SeqCst) {
                 Ok(x) => Result::Ok(x),
@@ -228,6 +232,7 @@ macro_rules! atomic_common_methods {
                 && equal(old(perm).view().value, ret)
                 && equal(self.id(), perm.view().patomic),
             opens_invariants none
+            no_unwind
         {
             return self.ato.swap(v, Ordering::SeqCst);
         }
@@ -239,6 +244,7 @@ macro_rules! atomic_common_methods {
                 equal(self.id(), perm.view().patomic),
             ensures equal(perm.view().value, ret),
             opens_invariants none
+            no_unwind
         {
             return self.ato.into_inner();
         }
@@ -264,6 +270,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value as int == $wrap_add(old(perm).view().value as int, n as int),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_add(n, Ordering::SeqCst);
         }
@@ -278,6 +285,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value as int == $wrap_sub(old(perm).view().value as int, n as int),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_sub(n, Ordering::SeqCst);
         }
@@ -297,6 +305,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == old(perm).view().value + n,
             opens_invariants none
+            no_unwind
         {
             self.fetch_add_wrapping(Tracked(&mut *perm), n)
         }
@@ -313,6 +322,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == old(perm).view().value - n,
             opens_invariants none
+            no_unwind
         {
             self.fetch_sub_wrapping(Tracked(&mut *perm), n)
         }
@@ -327,6 +337,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == (old(perm).view().value & n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_and(n, Ordering::SeqCst);
         }
@@ -341,6 +352,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == (old(perm).view().value | n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_or(n, Ordering::SeqCst);
         }
@@ -355,6 +367,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == (old(perm).view().value ^ n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_xor(n, Ordering::SeqCst);
         }
@@ -369,6 +382,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == !(old(perm).view().value & n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_nand(n, Ordering::SeqCst);
         }
@@ -383,6 +397,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == (if old(perm).view().value > n { old(perm).view().value } else { n }),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_max(n, Ordering::SeqCst);
         }
@@ -397,6 +412,7 @@ macro_rules! atomic_integer_methods {
                 perm.view().patomic == old(perm).view().patomic,
                 perm.view().value == (if old(perm).view().value < n { old(perm).view().value } else { n }),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_min(n, Ordering::SeqCst);
         }
@@ -420,6 +436,7 @@ macro_rules! atomic_bool_methods {
                 && perm.view().patomic == old(perm).view().patomic
                 && perm.view().value == (old(perm).view().value && n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_and(n, Ordering::SeqCst);
         }
@@ -435,6 +452,7 @@ macro_rules! atomic_bool_methods {
                 && perm.view().patomic == old(perm).view().patomic
                 && perm.view().value == (old(perm).view().value || n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_or(n, Ordering::SeqCst);
         }
@@ -450,6 +468,7 @@ macro_rules! atomic_bool_methods {
                 && perm.view().patomic == old(perm).view().patomic
                 && perm.view().value == ((old(perm).view().value && !n) || (!old(perm).view().value && n)),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_xor(n, Ordering::SeqCst);
         }
@@ -465,6 +484,7 @@ macro_rules! atomic_bool_methods {
                 && perm.view().patomic == old(perm).view().patomic
                 && perm.view().value == !(old(perm).view().value && n),
             opens_invariants none
+            no_unwind
         {
             return self.ato.fetch_nand(n, Ordering::SeqCst);
         }
