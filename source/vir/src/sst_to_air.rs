@@ -707,7 +707,11 @@ pub(crate) fn new_user_qid(ctx: &Ctx, exp: &Exp) -> Qid {
     Some(Arc::new(qid))
 }
 
-pub(crate) fn borrow_mut_exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<Expr, VirErr> {
+pub(crate) fn borrow_mut_exp_to_expr(
+    ctx: &Ctx,
+    exp: &Exp,
+    expr_ctxt: &ExprCtxt,
+) -> Result<Expr, VirErr> {
     match &exp.x {
         ExpX::Const(_) => panic!("unexpected mutable borrow of Const"),
         ExpX::Var(_) => panic!("unexpected mutable borrow of Var"),
@@ -752,7 +756,7 @@ pub(crate) fn exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<
             dbg!(&exp);
             // borrow_mut_exp_to_expr(ctx, e0, expr_ctxt)?
             exp_to_expr(ctx, e0, expr_ctxt)?
-        },
+        }
         ExpX::Old(span, x) => Arc::new(ExprX::Old(span.clone(), suffix_local_unique_id(x))),
         ExpX::Call(f @ (CallFun::Fun(..) | CallFun::Recursive(_)), typs, args) => {
             let x_name = match f {
