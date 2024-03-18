@@ -993,13 +993,14 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
                 )
             } else {
                 // TODO(&mut)
-                expr_to_vir_with_adjustments(
-                    bctx,
-                    expr,
-                    current_modifier,
-                    adjustments,
-                    adjustment_idx - 1,
-                )
+                let inner_expr = expr_to_vir_with_adjustments(
+                        bctx, expr, ExprModifier { addr_of: true, ..current_modifier },
+                        adjustments, adjustment_idx - 1)?;
+                // TODO(&mut) let ty_ = bctx.types.expr_ty(expr);
+                // TODO(&mut) let ty = 
+                // TODO(&mut)     is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg), modifier)?,
+                let ty = Arc::new(TypX::Decorate(vir::ast::TypDecoration::MutRef, inner_expr.typ.clone()));
+                Ok(bctx.spanned_typed_new(expr.span, &ty, ExprX::Loc(inner_expr)))
                 // TODO(&mut) unsupported_err!(
                 // TODO(&mut)    expr.span,
                 // TODO(&mut)    format!(

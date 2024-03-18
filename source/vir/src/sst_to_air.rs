@@ -707,6 +707,31 @@ pub(crate) fn new_user_qid(ctx: &Ctx, exp: &Exp) -> Qid {
     Some(Arc::new(qid))
 }
 
+pub(crate) fn borrow_mut_exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<Expr, VirErr> {
+    match &exp.x {
+        ExpX::Const(_) => panic!("unexpected mutable borrow of Const"),
+        ExpX::Var(_) => panic!("unexpected mutable borrow of Var"),
+        ExpX::StaticVar(_) => panic!("unexpected mutable borrow of StaticVar"),
+        ExpX::VarLoc(_) => todo!(),
+        ExpX::VarAt(_, _) => todo!("handle VarAt"),
+        ExpX::Loc(_) => todo!("handle &mut &mut"),
+        ExpX::Old(_, _) => todo!("hanlde &mut old(x)"),
+        ExpX::Call(_, _, _) => todo!("handle &mut Call"),
+        ExpX::CallLambda(_, _, _) => todo!("handle &mut CallLambda"),
+        ExpX::Ctor(_, _, _) => todo!("handle &mut Ctor"),
+        ExpX::NullaryOpr(_) => todo!("handle &mut NullaryOp"),
+        ExpX::Unary(_, _) => todo!("handle &mut Unary"),
+        ExpX::UnaryOpr(_, _) => todo!(),
+        ExpX::Binary(_, _, _) => todo!(),
+        ExpX::BinaryOpr(_, _, _) => todo!(),
+        ExpX::If(_, _, _) => todo!(),
+        ExpX::WithTriggers(_, _) => todo!(),
+        ExpX::Bind(_, _) => todo!(),
+        ExpX::ExecFnByName(_) => todo!(),
+        ExpX::Interp(_) => todo!(),
+    }
+}
+
 pub(crate) fn exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<Expr, VirErr> {
     let result = match &exp.x {
         ExpX::Const(c) => {
@@ -723,7 +748,11 @@ pub(crate) fn exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<
             ExprMode::BodyPre => string_var(&suffix_local_unique_id(x)),
         },
         ExpX::StaticVar(f) => string_var(&static_name(f)),
-        ExpX::Loc(e0) => exp_to_expr(ctx, e0, expr_ctxt)?,
+        ExpX::Loc(e0) => {
+            dbg!(&exp);
+            // borrow_mut_exp_to_expr(ctx, e0, expr_ctxt)?
+            exp_to_expr(ctx, e0, expr_ctxt)?
+        },
         ExpX::Old(span, x) => Arc::new(ExprX::Old(span.clone(), suffix_local_unique_id(x))),
         ExpX::Call(f @ (CallFun::Fun(..) | CallFun::Recursive(_)), typs, args) => {
             let x_name = match f {
