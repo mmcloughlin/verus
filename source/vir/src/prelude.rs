@@ -316,6 +316,8 @@ pub(crate) fn prelude_nodes(config: PreludeConfig) -> Vec<Node> {
             :qid prelude_ext_eq
             :skolemid skolem_prelude_ext_eq
         )))
+           
+        // TODO(&mut) (declare-sort [])
 
         // Integers
         // TODO: make this more configurable via options or HeaderExpr directives
