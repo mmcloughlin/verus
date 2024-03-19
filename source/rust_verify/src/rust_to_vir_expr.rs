@@ -7,8 +7,8 @@ use crate::erase::{CompilableOperator, ResolvedCall};
 use crate::rust_intrinsics_to_vir::int_intrinsic_constant_to_vir;
 use crate::rust_to_vir_base::{
     auto_deref_supported_for_ty, def_id_to_vir_path, get_impl_paths_for_clauses, get_range,
-    is_smt_arith, is_smt_equality, local_to_var, mid_ty_simplify, mid_ty_to_vir,
-    mid_ty_to_vir_ghost, mk_range, typ_of_node, typ_of_node_expect_mut_ref,
+    is_smt_arith, is_smt_equality, local_to_var, mid_ty_simplify_adt, mid_ty_to_vir,
+    mid_ty_to_vir_ghost, mk_range, typ_of_node,
 };
 use crate::spans::err_air_span;
 use crate::util::{
@@ -900,12 +900,19 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
         let vir_expr = {
             let inner_ty = bctx.types.expr_ty(expr);
             let mut deref = false;
+            let mut deref_mut = false;
             let mut new_modifier = current_modifier;
             if current_modifier.deref
                 && matches!(inner_ty.kind(), rustc_middle::ty::TyKind::Ref(_, _, Mutability::Not))
             {
                 deref = true;
                 new_modifier.deref = false;
+            }
+            if current_modifier.deref_mut
+                && matches!(inner_ty.kind(), rustc_middle::ty::TyKind::Ref(_, _, Mutability::Mut))
+            {
+                deref_mut = true;
+                new_modifier.deref_mut = false;
             }
             let mut new_expr: Arc<SpannedTyped<vir::ast::ExprX>> =
                 expr_to_vir_innermost(bctx, expr, new_modifier)?;
@@ -917,11 +924,7 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
                     panic!("unexpected type {:?} {:?}", *typ, &expr.span);
                 };
             }
-            // TODO(&mut) when we support mutable references more generally, this will be incorrect/unsound
-            if current_modifier.deref_mut
-                && !current_modifier.addr_of_mut
-                && matches!(inner_ty.kind(), rustc_middle::ty::TyKind::Ref(_, _, Mutability::Mut))
-            {
+            if deref_mut {
                 let typ = &mut Arc::make_mut(&mut new_expr).typ;
                 *typ = if let TypX::Decorate(vir::ast::TypDecoration::MutRef, inner_typ) = &**typ {
                     inner_typ.clone()
@@ -1156,13 +1159,7 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
 ) -> Result<vir::ast::Expr, VirErr> {
     let tcx = bctx.ctxt.tcx;
     let tc = bctx.types;
-    let expr_typ = || {
-        if current_modifier.deref_mut {
-            typ_of_node_expect_mut_ref(bctx, expr.span, &expr.hir_id)
-        } else {
-            typ_of_node(bctx, expr.span, &expr.hir_id, false)
-        }
-    };
+    let expr_typ = || typ_of_node(bctx, expr.span, &expr.hir_id, true);
     let mk_expr = move |x: ExprX| Ok(bctx.spanned_typed_new(expr.span, &expr_typ()?, x));
 
     let modifier = ExprModifier { deref_mut: false, ..current_modifier };
@@ -1683,7 +1680,7 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
             let lhs_modifier = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(lhs), modifier)?;
             let vir_lhs = expr_to_vir(bctx, lhs, lhs_modifier)?;
             let lhs_ty = tc.expr_ty_adjusted(lhs);
-            let lhs_ty = mid_ty_simplify(tcx, &bctx.ctxt.verus_items, &lhs_ty, true);
+            let lhs_ty = mid_ty_simplify_adt(tcx, &bctx.ctxt.verus_items, &lhs_ty);
             let (datatype, variant_name, field_name, check) = if let Some(adt_def) =
                 lhs_ty.ty_adt_def()
             {
