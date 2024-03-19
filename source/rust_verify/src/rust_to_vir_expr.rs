@@ -7,8 +7,8 @@ use crate::erase::{CompilableOperator, ResolvedCall};
 use crate::rust_intrinsics_to_vir::int_intrinsic_constant_to_vir;
 use crate::rust_to_vir_base::{
     auto_deref_supported_for_ty, def_id_to_vir_path, get_impl_paths_for_clauses, get_range,
-    is_smt_arith, is_smt_equality, local_to_var, mid_ty_simplify, mid_ty_to_vir,
-    mid_ty_to_vir_ghost, mk_range, typ_of_node, typ_of_node_expect_mut_ref,
+    is_smt_arith, is_smt_equality, local_to_var, mid_ty_simplify_adt, mid_ty_to_vir,
+    mid_ty_to_vir_ghost, mk_range, typ_of_node,
 };
 use crate::spans::err_air_span;
 use crate::util::{
@@ -1119,13 +1119,7 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
 ) -> Result<vir::ast::Expr, VirErr> {
     let tcx = bctx.ctxt.tcx;
     let tc = bctx.types;
-    let expr_typ = || {
-        if current_modifier.deref_mut {
-            typ_of_node_expect_mut_ref(bctx, expr.span, &expr.hir_id)
-        } else {
-            typ_of_node(bctx, expr.span, &expr.hir_id, false)
-        }
-    };
+    let expr_typ = || typ_of_node(bctx, expr.span, &expr.hir_id, true);
     let mk_expr = move |x: ExprX| Ok(bctx.spanned_typed_new(expr.span, &expr_typ()?, x));
 
     let modifier = ExprModifier { deref_mut: false, ..current_modifier };
@@ -1651,7 +1645,7 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
             let lhs_modifier = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(lhs), modifier)?;
             let vir_lhs = expr_to_vir(bctx, lhs, lhs_modifier)?;
             let lhs_ty = tc.expr_ty_adjusted(lhs);
-            let lhs_ty = mid_ty_simplify(tcx, &bctx.ctxt.verus_items, &lhs_ty, true);
+            let lhs_ty = mid_ty_simplify_adt(tcx, &bctx.ctxt.verus_items, &lhs_ty);
             let (datatype, variant_name, field_name, check) = if let Some(adt_def) =
                 lhs_ty.ty_adt_def()
             {

@@ -3,7 +3,6 @@ use crate::context::BodyCtxt;
 use crate::erase::{CompilableOperator, ResolvedCall};
 use crate::rust_to_vir_base::{
     def_id_to_vir_path, is_smt_arith, is_type_std_rc_or_arc_or_ref, mid_ty_to_vir, typ_of_node,
-    typ_of_node_expect_mut_ref,
 };
 use crate::rust_to_vir_expr::{
     check_lit_int, closure_param_typs, closure_to_vir, expr_to_vir, extract_array, extract_tuple,
@@ -653,7 +652,8 @@ where
                 )) = &args[0].kind
                 {
                     if let Node::Pat(pat) = tcx.hir().get(*id) {
-                        let typ = typ_of_node_expect_mut_ref(bctx, args[0].span, &expr.hir_id)?;
+                        // TODO(&mut) let typ = typ_of_node_expect_mut_ref(bctx, args[0].span, &expr.hir_id)?;
+                        let typ = typ_of_node(bctx, args[0].span, &expr.hir_id, true)?;
                         return Ok(bctx.spanned_typed_new(
                             expr.span,
                             &typ,
