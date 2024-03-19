@@ -6,7 +6,7 @@ use crate::rust_to_vir_base::{
 };
 use crate::rust_to_vir_expr::{
     check_lit_int, closure_param_typs, closure_to_vir, expr_to_vir, extract_array, extract_tuple,
-    get_fn_path, is_expr_typ_mut_ref, mk_ty_clip, pat_to_var, ExprModifier,
+    get_fn_path, expr_typ_deref_modifier, mk_ty_clip, pat_to_var, ExprModifier,
 };
 use crate::util::{err_span, unsupported_err_span, vec_map, vec_map_result, vir_err_span_str};
 use crate::verus_items::{
@@ -42,7 +42,7 @@ pub(crate) fn fn_call_to_vir<'tcx>(
     node_substs: &'tcx rustc_middle::ty::List<rustc_middle::ty::GenericArg<'tcx>>,
     _fn_span: Span,
     args: Vec<&'tcx Expr<'tcx>>,
-    outer_modifier: ExprModifier,
+    outer_modifier: &mut ExprModifier,
     is_method: bool,
 ) -> Result<vir::ast::Expr, VirErr> {
     let tcx = bctx.ctxt.tcx;
@@ -239,7 +239,7 @@ fn verus_item_to_vir<'tcx, 'a>(
     tcx: rustc_middle::ty::TyCtxt<'tcx>,
     node_substs: &'tcx rustc_middle::ty::List<rustc_middle::ty::GenericArg<'tcx>>,
     f: DefId,
-    outer_modifier: ExprModifier,
+    outer_modifier: &mut ExprModifier,
 ) -> Result<vir::ast::Expr, VirErr>
 where
     'tcx: 'a,
@@ -1284,7 +1284,8 @@ where
             record_spec_fn_no_proof_args(bctx, expr);
 
             assert!(args.len() == 1);
-            let modif = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier)?;
+            // TODO(&mut)
+            expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier);
             let vir_arg = expr_to_vir(bctx, &args[0], modif)?;
 
             let op = UnaryOp::CoerceMode {
@@ -1300,7 +1301,8 @@ where
             record_compilable_operator(bctx, expr, CompilableOperator::TrackedBorrowMut);
 
             assert!(args.len() == 1);
-            let modif = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier)?;
+            // TODO(&mut)
+            expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier);
             let vir_arg = expr_to_vir(bctx, &args[0], modif)?;
 
             let op = UnaryOp::CoerceMode {
@@ -1878,7 +1880,8 @@ fn mk_vir_args<'tcx>(
             expr_to_vir(
                 bctx,
                 arg,
-                is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg), ExprModifier::REGULAR)?,
+                // expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(arg), &mut ExprModifier::REGULAR.clone())?,
+                &mut ExprModifier::REGULAR.clone(),
             )
             // }
         })
@@ -1891,7 +1894,7 @@ fn mk_one_vir_arg<'tcx>(
     args: &Vec<&'tcx Expr<'tcx>>,
 ) -> Result<vir::ast::Expr, VirErr> {
     unsupported_err_unless!(args.len() == 1, span, "expected 1 argument", &args);
-    expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)
+    expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())
 }
 
 fn mk_two_vir_args<'tcx>(
@@ -1900,8 +1903,8 @@ fn mk_two_vir_args<'tcx>(
     args: &Vec<&'tcx Expr<'tcx>>,
 ) -> Result<(vir::ast::Expr, vir::ast::Expr), VirErr> {
     unsupported_err_unless!(args.len() == 2, span, "expected 2 arguments", &args);
-    let e0 = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
-    let e1 = expr_to_vir(bctx, &args[1], ExprModifier::REGULAR)?;
+    let e0 = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
+    let e1 = expr_to_vir(bctx, &args[1], &mut ExprModifier::REGULAR.clone())?;
     Ok((e0, e1))
 }
 
