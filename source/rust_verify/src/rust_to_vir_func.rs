@@ -64,7 +64,7 @@ pub(crate) fn body_to_vir<'tcx>(
         external_body,
         in_ghost: mode != Mode::Exec,
     };
-    expr_to_vir(&bctx, &body.value, ExprModifier::REGULAR)
+    expr_to_vir(&bctx, &body.value, &mut ExprModifier::REGULAR.clone())
 }
 
 fn check_fn_decl<'tcx>(

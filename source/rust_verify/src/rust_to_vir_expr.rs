@@ -36,7 +36,6 @@ use rustc_middle::ty::{
 use rustc_span::def_id::DefId;
 use rustc_span::source_map::Spanned;
 use rustc_span::Span;
-use typenum::Exp;
 use std::collections::LinkedList;
 use std::sync::Arc;
 use vir::ast::{
@@ -2372,7 +2371,6 @@ pub(crate) fn closure_to_vir<'tcx>(
     closure_expr: &Expr<'tcx>,
     closure_vir_typ: Typ,
     is_spec_fn: bool,
-    modifier: ExprModifier,
 ) -> Result<vir::ast::Expr, VirErr> {
     if let ExprKind::Closure(Closure { fn_decl, body: body_id, .. }) = &closure_expr.kind {
         unsupported_err_unless!(!fn_decl.c_variadic, closure_expr.span, "c_variadic");
@@ -2403,7 +2401,7 @@ pub(crate) fn closure_to_vir<'tcx>(
                 Ok(Arc::new(VarBinderX { name, a: t }))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let mut body = expr_to_vir(bctx, &body.value, modifier)?;
+        let mut body = expr_to_vir(bctx, &body.value, &mut ExprModifier::REGULAR.clone())?;
 
         let header = vir::headers::read_header(&mut body)?;
         let vir::headers::Header { require, ensure, ensure_id_typ, .. } = header;

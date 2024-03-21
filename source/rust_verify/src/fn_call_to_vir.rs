@@ -301,7 +301,7 @@ where
                 let subargs = extract_array(args[0]);
 
                 let vir_args =
-                    vec_map_result(&subargs, |arg| expr_to_vir(&bctx, arg, ExprModifier::REGULAR))?;
+                    vec_map_result(&subargs, |arg| expr_to_vir(&bctx, arg, &mut ExprModifier::REGULAR.clone()))?;
 
                 for (arg, vir_arg) in subargs.iter().zip(vir_args.iter()) {
                     let typ = vir::ast_util::undecorate_typ(&vir_arg.typ);
@@ -369,7 +369,7 @@ where
                 let subargs = extract_tuple(args[0]);
                 let bctx = &BodyCtxt { external_body: false, in_ghost: true, ..bctx.clone() };
                 let vir_args =
-                    vec_map_result(&subargs, |arg| expr_to_vir(&bctx, arg, ExprModifier::REGULAR))?;
+                    vec_map_result(&subargs, |arg| expr_to_vir(&bctx, arg, &mut ExprModifier::REGULAR.clone()))?;
                 let header = Arc::new(HeaderExprX::Decreases(Arc::new(vir_args)));
                 mk_expr(ExprX::Header(header))
             }
@@ -384,7 +384,7 @@ where
                 }
                 let bctx = &BodyCtxt { external_body: false, in_ghost: true, ..bctx.clone() };
                 let vir_args =
-                    vec_map_result(&subargs, |arg| expr_to_vir(&bctx, arg, ExprModifier::REGULAR))?;
+                    vec_map_result(&subargs, |arg| expr_to_vir(&bctx, arg, &mut ExprModifier::REGULAR.clone()))?;
                 let header = match spec_item {
                     SpecItem::InvariantExceptBreak => {
                         Arc::new(HeaderExprX::InvariantExceptBreak(Arc::new(vir_args)))
@@ -557,7 +557,7 @@ where
 
                 // let fun = get_fn_path(bctx, &args[0])?;
                 let ExprX::Const(Constant::Int(i)) =
-                    &expr_to_vir(bctx, &args[1], ExprModifier::REGULAR)?.x
+                    &expr_to_vir(bctx, &args[1], &mut ExprModifier::REGULAR.clone())?.x
                 else {
                     panic!("internal error: is_reveal_fuel");
                 };
@@ -669,7 +669,7 @@ where
                     ExprKind::Call(_, args) => {
                         assert!(args.len() == 1);
                         let arg0 = args.first().unwrap();
-                        let arg0 = expr_to_vir(bctx, arg0, ExprModifier::REGULAR)
+                        let arg0 = expr_to_vir(bctx, arg0, &mut ExprModifier::REGULAR.clone())
                             .expect("internal compiler error");
                         mk_expr(ExprX::Unary(UnaryOp::StrLen, arg0))
                     }
@@ -683,11 +683,11 @@ where
                 match &expr.kind {
                     ExprKind::Call(_, args) if args.len() == 2 => {
                         let arg0 = args.first().unwrap();
-                        let arg0 = expr_to_vir(bctx, arg0, ExprModifier::REGULAR).expect(
+                        let arg0 = expr_to_vir(bctx, arg0, &mut ExprModifier::REGULAR.clone()).expect(
                             "invalid parameter for builtin::strslice_get_char at arg0, arg0 must be self",
                         );
                         let arg1 = &args[1];
-                        let arg1 = expr_to_vir(bctx, arg1, ExprModifier::REGULAR)
+                        let arg1 = expr_to_vir(bctx, arg1, &mut ExprModifier::REGULAR.clone())
                             .expect("invalid parameter for builtin::strslice_get_char at arg1, arg1 must be an integer");
                         mk_expr(ExprX::Binary(BinaryOp::StrGetChar, arg0, arg1))
                     }
@@ -702,7 +702,7 @@ where
                     ExprKind::Call(_, args) => {
                         assert!(args.len() == 1);
                         let arg0 = args.first().unwrap();
-                        let arg0 = expr_to_vir(bctx, arg0, ExprModifier::REGULAR)
+                        let arg0 = expr_to_vir(bctx, arg0, &mut ExprModifier::REGULAR.clone())
                             .expect("internal compiler error");
                         mk_expr(ExprX::Unary(UnaryOp::StrIsAscii, arg0))
                     }
@@ -733,7 +733,7 @@ where
                     &args
                 );
                 if let ExprKind::Closure(..) = &args[0].kind {
-                    closure_to_vir(bctx, &args[0], expr_typ()?, true, ExprModifier::REGULAR)
+                    closure_to_vir(bctx, &args[0], expr_typ()?, true)
                 } else {
                     err_span(args[0].span, "the argument to `closure_to_spec_fn` must be a closure")
                 }
@@ -741,7 +741,7 @@ where
             ExprItem::SignedMin | ExprItem::SignedMax | ExprItem::UnsignedMax => {
                 record_spec_fn_no_proof_args(bctx, expr);
                 assert!(args.len() == 1);
-                let arg = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                let arg = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                 let kind = match expr_item {
                     ExprItem::SignedMin => IntegerTypeBoundKind::SignedMin,
                     ExprItem::SignedMax => IntegerTypeBoundKind::SignedMax,
@@ -779,7 +779,7 @@ where
             ExprItem::InferSpecForLoopIter => {
                 record_spec_fn_no_proof_args(bctx, expr);
                 assert!(args.len() == 2);
-                let arg = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                let arg = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                 let print_hint = matches!(
                     &args[1],
                     Expr { kind: ExprKind::Lit(Spanned { node: LitKind::Bool(true), .. }), .. }
@@ -789,7 +789,7 @@ where
             ExprItem::IsVariant => {
                 record_spec_fn_allow_proof_args(bctx, expr);
                 assert!(args.len() == 2);
-                let adt_arg = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                let adt_arg = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                 let variant_name = get_string_lit_arg(&args[1], &f_name)?;
 
                 let (adt_path, _) =
@@ -803,7 +803,7 @@ where
             ExprItem::GetVariantField => {
                 record_spec_fn_allow_proof_args(bctx, expr);
                 assert!(args.len() == 3);
-                let adt_arg = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                let adt_arg = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                 let variant_name = get_string_lit_arg(&args[1], &f_name)?;
                 let field_name = get_string_lit_arg(&args[2], &f_name)?;
 
@@ -829,7 +829,7 @@ where
             ExprItem::GetUnionField => {
                 record_spec_fn_allow_proof_args(bctx, expr);
                 assert!(args.len() == 2);
-                let adt_arg = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                let adt_arg = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                 let field_name = get_string_lit_arg(&args[1], &f_name)?;
 
                 let adt_path = check_union_field(
@@ -938,7 +938,7 @@ where
             match assert_item {
                 AssertItem::Assert => {
                     unsupported_err_unless!(args_len == 1, expr.span, "expected assert", &args);
-                    let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let exp = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                     mk_expr(ExprX::AssertAssume { is_assume: false, expr: exp })
                 }
                 AssertItem::AssertBy => {
@@ -949,8 +949,8 @@ where
                         &Arc::new(TypX::Bool),
                         ExprX::Const(Constant::Bool(true)),
                     );
-                    let ensure = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
-                    let proof = expr_to_vir(bctx, &args[1], ExprModifier::REGULAR)?;
+                    let ensure = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
+                    let proof = expr_to_vir(bctx, &args[1], &mut ExprModifier::REGULAR.clone())?;
                     mk_expr(ExprX::AssertBy { vars, require, ensure, proof })
                 }
                 AssertItem::AssertByCompute => {
@@ -960,7 +960,7 @@ where
                         "expected assert_by_compute",
                         &args
                     );
-                    let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let exp = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                     mk_expr(ExprX::AssertCompute(exp, ComputeMode::Z3))
                 }
                 AssertItem::AssertByComputeOnly => {
@@ -970,7 +970,7 @@ where
                         "expected assert_by_compute_only",
                         &args
                     );
-                    let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let exp = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                     mk_expr(ExprX::AssertCompute(exp, ComputeMode::ComputeOnly))
                 }
                 AssertItem::AssertNonlinearBy | AssertItem::AssertBitvectorBy => {
@@ -980,7 +980,7 @@ where
                         "expected assert_nonlinear_by/assert_bitvector_by with one argument",
                         &args
                     );
-                    let mut vir_expr = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let mut vir_expr = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                     let header = vir::headers::read_header(&mut vir_expr)?;
                     let requires = if header.require.len() >= 1 {
                         header.require
@@ -1033,7 +1033,7 @@ where
                 }
                 // internally translate this into `assert_bitvector_by`. REVIEW: consider deprecating this at all
                 AssertItem::AssertBitVector => {
-                    let vir_expr = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let vir_expr = expr_to_vir(bctx, &args[0], &mut ExprModifier::REGULAR.clone())?;
                     let requires = Arc::new(vec![bctx.spanned_typed_new(
                         expr.span,
                         &Arc::new(TypX::Bool),
@@ -1057,9 +1057,8 @@ where
         VerusItem::WithTriggers => {
             record_spec_fn_no_proof_args(bctx, expr);
             unsupported_err_unless!(args_len == 2, expr.span, "expected with_triggers", &args);
-            let modifier = ExprModifier::REGULAR;
-            let triggers_tuples = expr_to_vir(bctx, args[0], modifier)?;
-            let body = expr_to_vir(bctx, args[1], modifier)?;
+            let triggers_tuples = expr_to_vir(bctx, args[0], &mut ExprModifier::REGULAR.clone())?;
+            let body = expr_to_vir(bctx, args[1], &mut ExprModifier::REGULAR.clone())?;
             let mut trigs: Vec<vir::ast::Exprs> = Vec::new();
             if let ExprX::Tuple(triggers) = &triggers_tuples.x {
                 for trigger_tuple in triggers.iter() {
@@ -1285,8 +1284,9 @@ where
 
             assert!(args.len() == 1);
             // TODO(&mut)
-            expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier);
-            let vir_arg = expr_to_vir(bctx, &args[0], modif)?;
+            let mut modifier = &mut outer_modifier.clone();
+            expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(&args[0]), modifier);
+            let vir_arg = expr_to_vir(bctx, &args[0], modifier)?;
 
             let op = UnaryOp::CoerceMode {
                 op_mode: Mode::Proof,
@@ -1302,8 +1302,9 @@ where
 
             assert!(args.len() == 1);
             // TODO(&mut)
-            expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier);
-            let vir_arg = expr_to_vir(bctx, &args[0], modif)?;
+            let mut modifier = &mut outer_modifier.clone();
+            expr_typ_deref_modifier(bctx.types.expr_ty_adjusted(&args[0]), modifier);
+            let vir_arg = expr_to_vir(bctx, &args[0], modifier)?;
 
             let op = UnaryOp::CoerceMode {
                 op_mode: Mode::Proof,
@@ -1472,7 +1473,7 @@ where
 
             let vir_args = args
                 .iter()
-                .map(|arg| expr_to_vir(bctx, &arg, ExprModifier::REGULAR))
+                .map(|arg| expr_to_vir(bctx, &arg, &mut ExprModifier::REGULAR.clone()))
                 .collect::<Result<Vec<_>, _>>()?;
 
             let typ_args = mk_typ_args(bctx, node_substs, expr.span)?;
@@ -1566,7 +1567,7 @@ fn extract_quant<'tcx>(
                 binders.push(Arc::new(VarBinderX { name: pat_to_var(x.pat)?, a: t }));
             }
             let expr = &body.value;
-            let mut vir_expr = expr_to_vir(bctx, expr, ExprModifier::REGULAR)?;
+            let mut vir_expr = expr_to_vir(bctx, expr, &mut ExprModifier::REGULAR.clone())?;
             let header = vir::headers::read_header(&mut vir_expr)?;
             if header.require.len() + header.ensure.len() > 0 {
                 return err_span(expr.span, "forall/ensures cannot have requires/ensures");
@@ -1586,7 +1587,7 @@ fn get_ensures_arg<'tcx>(
     expr: &Expr<'tcx>,
 ) -> Result<vir::ast::Expr, VirErr> {
     if matches!(bctx.types.expr_ty_adjusted(expr).kind(), TyKind::Bool) {
-        expr_to_vir(bctx, expr, ExprModifier::REGULAR)
+        expr_to_vir(bctx, expr, &mut ExprModifier::REGULAR.clone())
     } else {
         err_span(expr.span, "ensures needs a bool expression")
     }
@@ -1609,7 +1610,7 @@ fn extract_assert_forall_by<'tcx>(
                 binders.push(Arc::new(VarBinderX { name: pat_to_var(x.pat)?, a: t }));
             }
             let expr = &body.value;
-            let mut vir_expr = expr_to_vir(bctx, expr, ExprModifier::REGULAR)?;
+            let mut vir_expr = expr_to_vir(bctx, expr, &mut ExprModifier::REGULAR.clone())?;
             let header = vir::headers::read_header(&mut vir_expr)?;
             if header.require.len() > 1 {
                 return err_span(expr.span, "assert_forall_by can have at most one requires");
@@ -1665,7 +1666,7 @@ fn extract_choose<'tcx>(
             }
             let typs = vec_map(&params, |p| p.a.clone());
             let cond_expr = &closure_body.value;
-            let cond = expr_to_vir(bctx, cond_expr, ExprModifier::REGULAR)?;
+            let cond = expr_to_vir(bctx, cond_expr, &mut ExprModifier::REGULAR.clone())?;
             let body = if tuple {
                 let typ = Arc::new(TypX::Tuple(Arc::new(typs)));
                 if !vir::ast_util::types_equal(&typ, &expr_typ) {
@@ -1750,8 +1751,8 @@ fn mk_is_smaller_than<'tcx>(
             bctx.spanned_typed_new(span, &tbool, ExprX::Binary(op, e1, e2))
         };
         let mk_cmp = |lt: bool| -> Result<vir::ast::Expr, VirErr> {
-            let e0 = expr_to_vir(bctx, exp0, ExprModifier::REGULAR)?;
-            let e1 = expr_to_vir(bctx, exp1, ExprModifier::REGULAR)?;
+            let e0 = expr_to_vir(bctx, exp0, &mut ExprModifier::REGULAR.clone())?;
+            let e1 = expr_to_vir(bctx, exp1, &mut ExprModifier::REGULAR.clone())?;
             if vir::recursion::height_is_int(&e0.typ) {
                 if lt {
                     // 0 <= x < y
@@ -1760,7 +1761,7 @@ fn mk_is_smaller_than<'tcx>(
                     let op0 = BinaryOp::Inequality(InequalityOp::Le);
                     let cmp0 = mk_bop(op0, zero, e0);
                     let op1 = BinaryOp::Inequality(InequalityOp::Lt);
-                    let e0 = expr_to_vir(bctx, exp0, ExprModifier::REGULAR)?;
+                    let e0 = expr_to_vir(bctx, exp0, &mut ExprModifier::REGULAR.clone())?;
                     let cmp1 = mk_bop(op1, e0, e1);
                     Ok(mk_bop(BinaryOp::And, cmp0, cmp1))
                 } else {
