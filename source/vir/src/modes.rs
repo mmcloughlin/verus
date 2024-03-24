@@ -901,6 +901,9 @@ fn check_expr_handle_mut_arg(
         ExprX::Loc(e) => {
             return check_expr_handle_mut_arg(ctxt, record, typing, outer_mode, e);
         }
+        ExprX::DerefLoc(e) => {
+            return check_expr_handle_mut_arg(ctxt, record, typing, outer_mode, e);
+        }
         ExprX::Binary(op, e1, e2) => {
             let op_mode = match op {
                 BinaryOp::Eq(mode) => *mode,

@@ -1088,6 +1088,11 @@ pub(crate) fn expr_to_stm_opt(
             let e0 = unwrap_or_return_never!(e0, stms);
             Ok((stms, ReturnValue::Some(mk_exp(ExpX::Loc(e0)))))
         }
+        ExprX::DerefLoc(expr1) => {
+            let (stms, e0) = expr_to_stm_opt(ctx, state, expr1)?;
+            let e0 = unwrap_or_return_never!(e0, stms);
+            Ok((stms, ReturnValue::Some(mk_exp(ExpX::DerefLoc(e0)))))
+        }
         ExprX::Resolve(x) => {
             let unique_id = state.get_var_unique_id(&x);
             let resolve = Spanned::new(expr.span.clone(), StmX::Resolve(unique_id));

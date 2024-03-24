@@ -475,6 +475,11 @@ fn poly_expr(ctx: &Ctx, state: &mut State, expr: &Expr) -> Expr {
             let typ = expr.typ.clone();
             mk_expr_typ(&typ, ExprX::Loc(expr))
         }
+        ExprX::DerefLoc(e) => {
+            let expr = poly_expr(ctx, state, e);
+            let typ = expr.typ.clone();
+            mk_expr_typ(&typ, ExprX::DerefLoc(expr))
+        }
         ExprX::Resolve(x) => {
             SpannedTyped::new(&expr.span, &state.types[x], ExprX::Resolve(x.clone()))
         }
