@@ -1284,7 +1284,8 @@ where
             record_spec_fn_no_proof_args(bctx, expr);
 
             assert!(args.len() == 1);
-            let modif = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier)?;
+            let adjusted_is_ref_mut = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(&args[0]);
+            let modif = ExprModifier { deref_mut: adjusted_is_ref_mut || outer_modifier.deref_mut, ..outer_modifier };
             let vir_arg = expr_to_vir(bctx, &args[0], modif)?;
 
             let op = UnaryOp::CoerceMode {
@@ -1300,7 +1301,8 @@ where
             record_compilable_operator(bctx, expr, CompilableOperator::TrackedBorrowMut);
 
             assert!(args.len() == 1);
-            let modif = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(&args[0]), outer_modifier)?;
+            let adjusted_is_ref_mut = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(&args[0]);
+            let modif = ExprModifier { deref_mut: adjusted_is_ref_mut || outer_modifier.deref_mut, ..outer_modifier };
             let vir_arg = expr_to_vir(bctx, &args[0], modif)?;
 
             let op = UnaryOp::CoerceMode {
@@ -1875,10 +1877,13 @@ fn mk_vir_args<'tcx>(
             // } else {
 
             // TODO(&mut) need different modifier for argument?
+            
+            let adjusted_expr_typ_is_mut_ref = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg));
+
             expr_to_vir(
                 bctx,
                 arg,
-                is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg), ExprModifier::REGULAR)?,
+                ExprModifier { deref_mut: adjusted_expr_typ_is_mut_ref, ..ExprModifier::REGULAR })?,
             )
             // }
         })

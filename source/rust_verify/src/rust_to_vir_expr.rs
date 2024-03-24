@@ -842,15 +842,16 @@ impl ExprModifier {
     pub(crate) const ADDR_OF_MUT: Self = Self { deref_mut: false, addr_of_mut: true };
 }
 
+// TODO (&mut)
 pub(crate) fn is_expr_typ_mut_ref<'tcx>(
     ty: rustc_middle::ty::Ty<'tcx>,
-    modifier: ExprModifier,
-) -> Result<ExprModifier, VirErr> {
+    // modifier: ExprModifier,
+) -> bool {
     match ty.kind() {
         TyKind::Ref(_, _tys, rustc_ast::Mutability::Mut) => {
-            Ok(ExprModifier { deref_mut: true, ..modifier })
+            true // Ok(ExprModifier { deref_mut: true, ..modifier })
         }
-        _ => Ok(modifier),
+        _ => true, Ok(modifier),
     }
 }
 
@@ -920,11 +921,11 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
         ),
         Adjust::Deref(None) => {
             // handle same way as the UnOp::Deref case
-            let new_modifier = is_expr_typ_mut_ref(get_inner_ty(), current_modifier)?;
+            let derefing_mut_ref = is_expr_typ_mut_ref(get_inner_ty());
             let mut new_expr = expr_to_vir_with_adjustments(
                 bctx,
                 expr,
-                new_modifier,
+                ExprModifier { deref_mut: false, ..current_modifier },
                 adjustments,
                 adjustment_idx - 1,
             )?;
@@ -940,7 +941,7 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
             {
                 *typ = inner_typ.clone();
             }
-            Ok(new_expr)
+            Ok(bctx.spanned_typed_new(expr.span, typ, ExprX::DerefLoc(new_expr)))
         }
         Adjust::Deref(Some(_)) => {
             // note: deref has signature (&self) -> &Self::Target
@@ -1000,20 +1001,11 @@ pub(crate) fn expr_to_vir_with_adjustments<'tcx>(
                     adjustments,
                     adjustment_idx - 1,
                 )?;
-                // TODO(&mut) let ty_ = bctx.types.expr_ty(expr);
-                // TODO(&mut) let ty =
-                // TODO(&mut)     is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg), modifier)?,
                 let ty = Arc::new(TypX::Decorate(
                     vir::ast::TypDecoration::MutRef,
                     inner_expr.typ.clone(),
                 ));
                 Ok(bctx.spanned_typed_new(expr.span, &ty, ExprX::Loc(inner_expr)))
-                // TODO(&mut) unsupported_err!(
-                // TODO(&mut)    expr.span,
-                // TODO(&mut)    format!(
-                // TODO(&mut)        "&mut dereference in this position (note: &mut dereference is implicit here)"
-                // TODO(&mut)    )
-                // TODO(&mut) )
             }
         }
         Adjust::Borrow(AutoBorrow::RawPtr(_)) => {
@@ -1498,9 +1490,9 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
                 ))
             }
             UnOp::Deref => {
-                let modifier =
-                    is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg), current_modifier)?;
-                let mut new_expr = expr_to_vir_inner(bctx, arg, modifier)?;
+                let derefing_mut_ref = is_expr_typ_mut_ref(get_inner_ty());
+                // let modifier = is_expr_typ_mut_ref(bctx.types.expr_ty_adjusted(arg), current_modifier)?;
+                let mut new_expr = expr_to_vir_inner(bctx, arg, ExprModifier { deref_mut: false, ..current_modifier })?;
                 let typ = &mut Arc::make_mut(&mut new_expr).typ;
                 if let TypX::Decorate(
                     vir::ast::TypDecoration::MutRef
@@ -1513,7 +1505,7 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
                 {
                     *typ = inner_typ.clone();
                 }
-                Ok(new_expr)
+                Ok(bctx.spanned_typed_new(expr.span, typ, ExprX::DerefLoc(new_expr)))
             }
         },
         ExprKind::Binary(op, lhs, rhs) => {
