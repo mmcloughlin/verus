@@ -1084,9 +1084,14 @@ pub(crate) fn expr_to_stm_opt(
         }
         ExprX::ConstVar(..) => panic!("ConstVar should already be removed"),
         ExprX::Loc(expr1) => {
-            let (stms, e0) = expr_to_stm_opt(ctx, state, expr1)?;
-            let e0 = unwrap_or_return_never!(e0, stms);
-            Ok((stms, ReturnValue::Some(mk_exp(ExpX::Loc(e0)))))
+            let (stms, lhs_exp) = expr_to_stm_opt(ctx, state, expr1)?;
+            // let lhs_exp = unwrap_or_return_never!(e0, stms);
+            let lhs_exp = lhs_exp.expect_value();
+            let rhs = todo!("&mut");
+            let assign = StmX::Assign { lhs: Dest { dest: lhs_exp, is_init: false }, rhs };
+            stms.push(Spanned::new(expr.span.clone(), assign));
+            Ok((stms, ReturnValue::ImplicitUnit(expr.span.clone())))
+            // Ok((stms, ReturnValue::Some(mk_exp(ExpX::Loc(e0)))))
         }
         ExprX::DerefLoc(expr1) => {
             let (stms, e0) = expr_to_stm_opt(ctx, state, expr1)?;
