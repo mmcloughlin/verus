@@ -549,6 +549,9 @@ fn get_var_loc_mode(
                 get_var_loc_mode(ctxt, record, &mut typing, outer_mode, None, e1, init_not_mut)?;
             mode
         }
+        ExprX::DerefLoc(e1) => {
+            get_var_loc_mode(ctxt, record, typing, outer_mode, None, e1, init_not_mut)?
+        }
         _ => {
             panic!("unexpected loc {:?}", expr);
         }
