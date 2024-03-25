@@ -29,9 +29,7 @@ use air::scope_map::ScopeMap;
 use indexmap::IndexSet;
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
-use std::backtrace;
 use std::collections::{BTreeMap, HashMap};
-use std::f32::consts::E;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -1090,9 +1088,8 @@ pub(crate) fn expr_to_stm_opt(
             // TODO(&mut) let lhs_exp = unwrap_or_return_never!(e0, stms);
             let lhs_exp = lhs_exp.expect_value();
             
-            dbg!(&expr.typ);
-            eprintln!("{}", backtrace::Backtrace::force_capture().to_string());
-            let (temp_ident, temp_var) = state.declare_temp_var_stm(&lhs_exp.span, &expr.typ);
+            // TODO(&mut) dbg!(&expr.typ);
+            let (_temp_ident, temp_var) = state.declare_temp_var_stm(&lhs_exp.span, &expr.typ);
             {
                 let exp = SpannedTyped::new(&expr.span, &expr.typ, ExpX::Call(
                     CallFun::InternalFun(InternalFun::ProphecyValue), 
