@@ -48,6 +48,8 @@ pub enum InternalFun {
     CheckDecreaseInt,
     CheckDecreaseHeight,
     HasType,
+    ProphecyValue,
+    ProphecyFuture,
 }
 
 #[derive(Debug, Clone, Hash)]

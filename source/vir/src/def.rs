@@ -166,11 +166,16 @@ pub const HEIGHT_REC_FUN: &str = "fun_from_recursive_field";
 pub const CLOSURE_REQ: &str = "closure_req";
 pub const CLOSURE_ENS: &str = "closure_ens";
 pub const EXT_EQ: &str = "ext_eq";
-// pub const PROPHECY_INT: &str = "I";
-// pub const PROPHECY_BOOL: &str = "B";
-// pub const PROPHECY_STRSLICE: &str = "S";
-// pub const PROPHECY_CHAR: &str = "C";
-// pub const PROPHECY_FNDEF: &str = "F";
+
+pub const PROPHECY_INT_SUFFIX: &str = "I";
+pub const PROPHECY_BOOL_SUFFIX: &str = "B";
+pub const PROPHECY_STRSLICE_SUFFIX: &str = "S";
+pub const PROPHECY_CHAR_SUFFIX: &str = "C";
+pub const PROPHECY_FNDEF_SUFFIX: &str = "F";
+pub const PROPHECY_POLY_SUFFIX: &str = "Poly";
+pub const PROPHECY_SORT_PREFIX: &str = "Proph%";
+pub const PROPHECY_VALUE_PREFIX: &str = "Proph%value%";
+pub const PROPHECY_FUTURE_PREFIX: &str = "Proph%future%";
 
 pub const UINT_XOR: &str = "uintxor";
 pub const UINT_AND: &str = "uintand";

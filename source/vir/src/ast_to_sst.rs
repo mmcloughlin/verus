@@ -30,6 +30,7 @@ use indexmap::IndexSet;
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
 use std::collections::{BTreeMap, HashMap};
+use std::f32::consts::E;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -1084,14 +1085,33 @@ pub(crate) fn expr_to_stm_opt(
         }
         ExprX::ConstVar(..) => panic!("ConstVar should already be removed"),
         ExprX::Loc(expr1) => {
-            let (stms, lhs_exp) = expr_to_stm_opt(ctx, state, expr1)?;
-            // let lhs_exp = unwrap_or_return_never!(e0, stms);
+            let (mut stms, lhs_exp) = expr_to_stm_opt(ctx, state, expr1)?;
+            // TODO(&mut) let lhs_exp = unwrap_or_return_never!(e0, stms);
             let lhs_exp = lhs_exp.expect_value();
-            let rhs = todo!("&mut");
-            let assign = StmX::Assign { lhs: Dest { dest: lhs_exp, is_init: false }, rhs };
-            stms.push(Spanned::new(expr.span.clone(), assign));
-            Ok((stms, ReturnValue::ImplicitUnit(expr.span.clone())))
-            // Ok((stms, ReturnValue::Some(mk_exp(ExpX::Loc(e0)))))
+            
+            let (temp_ident, temp_var) = state.declare_temp_var_stm(&lhs_exp.span, &expr.typ);
+            {
+                let exp = SpannedTyped::new(&expr.span, &expr.typ, ExpX::Call(
+                    CallFun::InternalFun(InternalFun::ProphecyValue), 
+                    Arc::new(vec![lhs_exp.typ.clone()]),
+                    Arc::new(vec![temp_var.clone()]),
+                ));
+                let eqx = ExpX::Binary(BinaryOp::Eq(Mode::Spec), exp.clone(), lhs_exp.clone());
+                let eq = SpannedTyped::new(&expr.span, &Arc::new(TypX::Bool), eqx);
+                stms.push(Spanned::new(expr.span.clone(), StmX::Assume(eq)));
+            }
+            
+            {
+                let rhs = SpannedTyped::new(&expr.span, &expr.typ, ExpX::Call(
+                    CallFun::InternalFun(InternalFun::ProphecyFuture), 
+                    Arc::new(vec![lhs_exp.typ.clone()]),
+                    Arc::new(vec![temp_var.clone()]),
+                ));
+                let assign = StmX::Assign { lhs: Dest { dest: lhs_exp, is_init: false }, rhs };
+                stms.push(Spanned::new(expr.span.clone(), assign));
+            }
+
+            Ok((stms, ReturnValue::Some(temp_var)))
         }
         ExprX::DerefLoc(expr1) => {
             let (stms, e0) = expr_to_stm_opt(ctx, state, expr1)?;

@@ -247,6 +247,7 @@ pub enum TypX {
     Char,
     /// Other primitive type (applied to type arguments)
     Primitive(Primitive, Typs),
+    
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, ToDebugSNode)]
