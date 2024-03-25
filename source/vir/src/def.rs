@@ -835,3 +835,19 @@ pub(crate) fn dummy_param_name() -> VarIdent {
 pub(crate) fn is_dummy_param_name(v: &VarIdent) -> bool {
     v.0.to_string() == DUMMY_PARAM
 }
+
+pub(crate) fn prophecy_sort_name(prophecy_type_name: &str) -> String {
+    format!("{}{}", PROPHECY_SORT_PREFIX, prophecy_type_name)
+}
+
+pub(crate) enum ProphecyAccessor {
+    Value,
+    Future,
+}
+
+pub(crate) fn prophecy_accessor_name(accessor: ProphecyAccessor, prophecy_type_name: &str) -> String {
+    format!("{}{}", match accessor {
+        ProphecyAccessor::Value => PROPHECY_VALUE_PREFIX,
+        ProphecyAccessor::Future => PROPHECY_FUTURE_PREFIX,
+    }, prophecy_type_name)
+}

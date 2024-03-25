@@ -117,6 +117,9 @@ pub(crate) fn prelude_nodes(config: PreludeConfig) -> Vec<Node> {
 
     let type_id_array = str_to_node(TYPE_ID_ARRAY);
     let type_id_slice = str_to_node(TYPE_ID_SLICE);
+    
+    #[allow(non_snake_case)]
+    let ProphInt = str_to_node(prophecy_sort_name(PROPHECY_INT_SUFFIX).as_str());
 
     nodes_vec!(
         // Fuel
@@ -277,6 +280,11 @@ pub(crate) fn prelude_nodes(config: PreludeConfig) -> Vec<Node> {
             :qid prelude_box_unbox_sint
             :skolemid skolem_prelude_box_unbox_sint
         )))
+           
+        // Prophecy
+        (declare-sort [ProphInt] 0)
+            
+        (declare-fun [])
 
         // String literals
         (axiom (forall ((x Int)) (!

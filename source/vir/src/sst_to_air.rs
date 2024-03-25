@@ -11,7 +11,7 @@ use crate::ast_util::{
 use crate::bitvector_to_air::{bv_exp_to_expr, BvExprCtxt};
 use crate::context::Ctx;
 use crate::def::{
-    fn_inv_name, fn_namespace_name, fun_to_string, is_variant_ident, new_internal_qid, new_user_qid_name, path_to_string, prefix_box, prefix_ensures, prefix_fuel_id, prefix_lambda_type, prefix_open_inv, prefix_pre_var, prefix_requires, prefix_unbox, snapshot_ident, static_name, suffix_global_id, suffix_local_unique_id, suffix_typ_param_ids, unique_local, variant_field_ident, variant_ident, CommandsWithContext, CommandsWithContextX, ProverChoice, SnapPos, SpanKind, Spanned, ARCH_SIZE, CHAR_FROM_UNICODE, CHAR_TO_UNICODE, FUEL_BOOL, FUEL_BOOL_DEFAULT, FUEL_DEFAULTS, FUEL_ID, FUEL_PARAM, FUEL_TYPE, I_HI, I_LO, POLY, PROPHECY_BOOL_SUFFIX, PROPHECY_CHAR_SUFFIX, PROPHECY_FNDEF_SUFFIX, PROPHECY_FUTURE_PREFIX, PROPHECY_INT_SUFFIX, PROPHECY_POLY_SUFFIX, PROPHECY_STRSLICE_SUFFIX, PROPHECY_VALUE_PREFIX, SNAPSHOT_ASSIGN, SNAPSHOT_CALL, SNAPSHOT_PRE, STRSLICE_GET_CHAR, STRSLICE_IS_ASCII, STRSLICE_LEN, STRSLICE_NEW_STRLIT, SUCC, SUFFIX_SNAP_JOIN, SUFFIX_SNAP_MUT, SUFFIX_SNAP_WHILE_BEGIN, SUFFIX_SNAP_WHILE_END, U_HI
+    fn_inv_name, fn_namespace_name, fun_to_string, is_variant_ident, new_internal_qid, new_user_qid_name, path_to_string, prefix_box, prefix_ensures, prefix_fuel_id, prefix_lambda_type, prefix_open_inv, prefix_pre_var, prefix_requires, prefix_unbox, prophecy_accessor_name, snapshot_ident, static_name, suffix_global_id, suffix_local_unique_id, suffix_typ_param_ids, unique_local, variant_field_ident, variant_ident, CommandsWithContext, CommandsWithContextX, ProphecyAccessor, ProverChoice, SnapPos, SpanKind, Spanned, ARCH_SIZE, CHAR_FROM_UNICODE, CHAR_TO_UNICODE, FUEL_BOOL, FUEL_BOOL_DEFAULT, FUEL_DEFAULTS, FUEL_ID, FUEL_PARAM, FUEL_TYPE, I_HI, I_LO, POLY, PROPHECY_BOOL_SUFFIX, PROPHECY_CHAR_SUFFIX, PROPHECY_FNDEF_SUFFIX, PROPHECY_FUTURE_PREFIX, PROPHECY_INT_SUFFIX, PROPHECY_POLY_SUFFIX, PROPHECY_STRSLICE_SUFFIX, PROPHECY_VALUE_PREFIX, SNAPSHOT_ASSIGN, SNAPSHOT_CALL, SNAPSHOT_PRE, STRSLICE_GET_CHAR, STRSLICE_IS_ASCII, STRSLICE_LEN, STRSLICE_NEW_STRLIT, SUCC, SUFFIX_SNAP_JOIN, SUFFIX_SNAP_MUT, SUFFIX_SNAP_WHILE_BEGIN, SUFFIX_SNAP_WHILE_END, U_HI
 };
 use crate::inv_masks::MaskSet;
 use crate::messages::{error, error_with_label, Span};
@@ -773,12 +773,6 @@ pub(crate) fn exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<
         ExpX::Call(CallFun::InternalFun(fv @ (InternalFun::ProphecyFuture | InternalFun::ProphecyValue)), typs, args) => {
             assert!(typs.len() == 1);
             assert!(args.len() == 1);
-            let apply_name_prefix = match fv {
-                InternalFun::ProphecyValue => PROPHECY_VALUE_PREFIX,
-                InternalFun::ProphecyFuture => PROPHECY_FUTURE_PREFIX,
-                _ => unreachable!(),
-            };
-
             // TODO(&mut)
             let apply_name_suffix = match &*typs[0] {
                 TypX::Bool => PROPHECY_BOOL_SUFFIX, 
@@ -801,7 +795,14 @@ pub(crate) fn exp_to_expr(ctx: &Ctx, exp: &Exp, expr_ctxt: &ExprCtxt) -> Result<
             };
 
             let arg = exp_to_expr(ctx, &args[0], expr_ctxt)?;
-            str_apply(&format!("{}{}", apply_name_prefix, apply_name_suffix), &vec![arg])
+
+            let accessor = match fv {
+                InternalFun::ProphecyValue => ProphecyAccessor::Value,
+                InternalFun::ProphecyFuture => ProphecyAccessor::Future,
+                _ => unreachable!(),
+            };
+
+            str_apply(&prophecy_accessor_name(accessor, apply_name_suffix), &vec![arg])
         }
         ExpX::Call(CallFun::InternalFun(func), typs, args) => {
             // These functions are special-cased to not take a decoration argument for
