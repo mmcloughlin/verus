@@ -1386,6 +1386,7 @@ fn loc_to_field_path(loc: &Exp) -> (UniqueIdent, LocFieldInfo<Vec<FieldOpr>>) {
     loop {
         match &e.x {
             ExpX::Loc(ee) => e = ee,
+            ExpX::DerefLoc(ee) => e = ee, // TODO (&mut)
             ExpX::UnaryOpr(UnaryOpr::Box(_) | UnaryOpr::Unbox(_), ee) => e = ee,
             ExpX::VarLoc(x) => {
                 fields.reverse();
