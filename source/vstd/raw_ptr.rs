@@ -202,6 +202,7 @@ pub open spec fn ptr_null<T: ?Sized + core::ptr::Thin>() -> *const T {
     ptr_from_data(PtrData { addr: 0, provenance: Provenance::null(), metadata: Metadata::unit() })
 }
 
+#[cfg(verus_keep_ghost)]
 #[verifier::external_fn_specification]
 #[verifier::when_used_as_spec(ptr_null)]
 pub fn ex_ptr_null<T: ?Sized + core::ptr::Thin>() -> (res: *const T)
@@ -218,6 +219,7 @@ pub open spec fn ptr_null_mut<T: ?Sized + core::ptr::Thin>() -> *mut T {
     )
 }
 
+#[cfg(verus_keep_ghost)]
 #[verifier::external_fn_specification]
 #[verifier::when_used_as_spec(ptr_null_mut)]
 pub fn ex_ptr_null_mut<T: ?Sized + core::ptr::Thin>() -> (res: *mut T)
