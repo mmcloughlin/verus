@@ -1480,26 +1480,28 @@ pub(crate) fn expr_to_vir_innermost<'tcx>(
         ExprKind::Cast(source, _) => {
             let source_vir = expr_to_vir(bctx, source, modifier)?;
 
-            if is_simple_ptr_cast(bctx.types.expr_ty_adjusted(source), bctx.types.expr_ty(expr)) {
+            let source_ty = bctx.types.expr_ty_adjusted(source);
+            let to_ty = bctx.types.expr_ty(expr);
+            if is_simple_ptr_cast(source_ty, to_ty) {
                 return Ok(source_vir);
             }
 
-            let source_ty = &source_vir.typ;
-            let to_ty = expr_typ()?;
-            match (&*undecorate_typ(source_ty), &*undecorate_typ(&to_ty)) {
+            let source_vir_ty = &source_vir.typ;
+            let to_vir_ty = expr_typ()?;
+            match (&*undecorate_typ(source_vir_ty), &*undecorate_typ(&to_vir_ty)) {
                 (TypX::Int(_), TypX::Int(_)) => {
-                    Ok(mk_ty_clip(&to_ty, &source_vir, expr_vattrs.truncate))
+                    Ok(mk_ty_clip(&to_vir_ty, &source_vir, expr_vattrs.truncate))
                 }
                 (TypX::Char, TypX::Int(_)) => {
                     let source_unicode =
                         mk_expr(ExprX::Unary(UnaryOp::CharToInt, source_vir.clone()))?;
-                    Ok(mk_ty_clip(&to_ty, &source_unicode, expr_vattrs.truncate))
+                    Ok(mk_ty_clip(&to_vir_ty, &source_unicode, expr_vattrs.truncate))
                 }
                 _ => {
                     return err_span(
                         expr.span,
                         format!(
-                            "Verus does not support this cast: `{:?}` to `{:?}`",
+                            "Verus does not support this cast: `{:#?}` to `{:#?}`",
                             source_ty, to_ty
                         ),
                     );
