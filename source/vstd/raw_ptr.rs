@@ -1,15 +1,14 @@
 #![allow(unused_imports)]
 
+use crate::prelude::*;
 use builtin::*;
 use builtin_macros::*;
-use crate::prelude::*;
 use core::ptr::Pointee;
 
-verus!{
+verus! {
 
 //////////////////////////////////////
 // Define a model of Ptrs and PointsTo
-
 // Notes on mutability:
 //
 //  - Unique vs shared ownership in Verus is always determined
@@ -33,7 +32,7 @@ verus!{
 //
 //  - A full model of provenance is given by formalisms such as "Stacked Borrows"
 //    or "Tree Borrows".
-//  
+//
 //  - None of these models are finalized, nor has Rust committed to then.
 //    Rust's recent RFC on provenance simply details that there *is* some concept
 //    of provenance.
@@ -41,9 +40,8 @@ verus!{
 //
 //  - Our model here, likewise, simply declares Provenance as an
 //    abstract type.
-
 #[verifier::external_body]
-pub ghost struct Provenance { }
+pub ghost struct Provenance {}
 
 impl Provenance {
     /// The provenance of the null ptr
@@ -61,9 +59,8 @@ impl Provenance {
 //
 // TODO flesh out the metadata system for working with DSTs
 // It may make sense to use <T as Pointee>::Metadata directly.
-
 #[verifier::external_body]
-pub ghost struct Metadata { }
+pub ghost struct Metadata {}
 
 impl Metadata {
     // Unit metadata used for thin pointers
@@ -87,7 +84,6 @@ pub tracked struct PointsTo<T> {
 // with verifying the standard library.
 // (Also, using our own enum here lets us have more meaningful
 // variant names like Uninit/Init.)
-
 #[verifier::accept_recursive_types(T)]
 pub ghost enum MemContents<T> {
     Uninit,
@@ -101,6 +97,7 @@ pub ghost struct PointsToData<T> {
 
 impl<T> View for *mut T {
     type V = PtrData;
+
     spec fn view(&self) -> Self::V;
 }
 
@@ -108,46 +105,64 @@ impl<T> View for *const T {
     type V = PtrData;
 
     #[verifier::inline]
-    open spec fn view(&self) -> Self::V { (*self as *mut T).view() }
+    open spec fn view(&self) -> Self::V {
+        (*self as *mut T).view()
+    }
 }
 
 impl<T> View for PointsTo<T> {
     type V = PointsToData<T>;
+
     spec fn view(&self) -> Self::V;
 }
 
 impl<T> PointsTo<T> {
     #[verifier::inline]
-    pub open spec fn ptr(&self) -> *mut T { self.view().ptr }
+    pub open spec fn ptr(&self) -> *mut T {
+        self.view().ptr
+    }
 
     #[verifier::inline]
-    pub open spec fn opt_value(&self) -> MemContents<T> { self.view().opt_value }
+    pub open spec fn opt_value(&self) -> MemContents<T> {
+        self.view().opt_value
+    }
 
     #[verifier::inline]
-    pub open spec fn is_init(&self) -> bool { self.opt_value().is_init() }
+    pub open spec fn is_init(&self) -> bool {
+        self.opt_value().is_init()
+    }
 
     #[verifier::inline]
-    pub open spec fn is_uninit(&self) -> bool { self.opt_value().is_uninit() }
+    pub open spec fn is_uninit(&self) -> bool {
+        self.opt_value().is_uninit()
+    }
 
     #[verifier::inline]
-    pub open spec fn value(&self) -> T { self.opt_value().value() }
+    pub open spec fn value(&self) -> T {
+        self.opt_value().value()
+    }
 }
 
 impl<T> MemContents<T> {
     #[verifier::inline]
-    pub open spec fn is_init(&self) -> bool { self is Init }
+    pub open spec fn is_init(&self) -> bool {
+        self is Init
+    }
 
     #[verifier::inline]
-    pub open spec fn is_uninit(&self) -> bool { self is Uninit }
+    pub open spec fn is_uninit(&self) -> bool {
+        self is Uninit
+    }
 
     #[verifier::inline]
-    pub open spec fn value(&self) -> T { self->0 }
+    pub open spec fn value(&self) -> T {
+        self->0
+    }
 }
 
 //////////////////////////////////////
 // Inverse functions:
 // Pointers are equivalent to their model
-
 pub spec fn ptr_mut_from_data<T: ?Sized>(data: PtrData) -> *mut T;
 
 #[verifier::inline]
@@ -159,24 +174,29 @@ pub open spec fn ptr_from_data<T: ?Sized>(data: PtrData) -> *const T {
 pub broadcast proof fn axiom_ptr_mut_from_data<T>(data: PtrData)
     ensures
         (#[trigger] ptr_mut_from_data::<T>(data))@ == data,
-{ }
+{
+}
 
 #[verifier::external_body]
 pub broadcast proof fn ptrs_mut_eq<T>(a: *mut T, b: *mut T)
-    requires #[trigger] a@ == #[trigger] b@,
-    ensures a == b,
-{ }
+    requires
+        #[trigger] a@ == #[trigger] b@,
+    ensures
+        a == b,
+{
+}
 
 pub broadcast proof fn ptrs_eq<T>(a: *const T, b: *const T)
-    requires #[trigger] a@ == #[trigger] b@,
-    ensures a == b,
+    requires
+        #[trigger] a@ == #[trigger] b@,
+    ensures
+        a == b,
 {
     ptrs_mut_eq(a as *mut T, b as *mut T);
 }
 
 //////////////////////////////////////
 // Null ptrs
-
 #[verifier::inline]
 pub open spec fn ptr_null<T: ?Sized + core::ptr::Thin>() -> *const T {
     ptr_from_data(PtrData { addr: 0, provenance: Provenance::null(), metadata: Metadata::unit() })
@@ -184,21 +204,25 @@ pub open spec fn ptr_null<T: ?Sized + core::ptr::Thin>() -> *const T {
 
 #[verifier::external_fn_specification]
 #[verifier::when_used_as_spec(ptr_null)]
-pub fn ex_ptr_null<T : ?Sized + core::ptr::Thin>() -> (res: *const T)
-    ensures res == ptr_null::<T>()
+pub fn ex_ptr_null<T: ?Sized + core::ptr::Thin>() -> (res: *const T)
+    ensures
+        res == ptr_null::<T>(),
 {
     core::ptr::null()
 }
 
 #[verifier::inline]
 pub open spec fn ptr_null_mut<T: ?Sized + core::ptr::Thin>() -> *mut T {
-    ptr_mut_from_data(PtrData { addr: 0, provenance: Provenance::null(), metadata: Metadata::unit() })
+    ptr_mut_from_data(
+        PtrData { addr: 0, provenance: Provenance::null(), metadata: Metadata::unit() },
+    )
 }
 
 #[verifier::external_fn_specification]
 #[verifier::when_used_as_spec(ptr_null_mut)]
 pub fn ex_ptr_null_mut<T: ?Sized + core::ptr::Thin>() -> (res: *mut T)
-    ensures res == ptr_null_mut::<T>()
+    ensures
+        res == ptr_null_mut::<T>(),
 {
     core::ptr::null_mut()
 }
@@ -235,9 +259,7 @@ pub fn ptr_mut_read<T>(ptr: *const T, Tracked(perm): Tracked<&mut PointsTo<T>>) 
         v == old(perm).value(),
     opens_invariants none
 {
-    unsafe {
-        core::ptr::read(ptr)
-    }
+    unsafe { core::ptr::read(ptr) }
 }
 
 /// equivalent to &*X
@@ -246,7 +268,7 @@ pub fn ptr_mut_read<T>(ptr: *const T, Tracked(perm): Tracked<&mut PointsTo<T>>) 
 pub fn ptr_ref<T>(ptr: *const T, Tracked(perm): Tracked<&PointsTo<T>>) -> (v: &T)
     requires
         perm.ptr() == ptr,
-        perm.is_init()
+        perm.is_init(),
     ensures
         v == perm.value(),
 {
@@ -269,6 +291,5 @@ pub fn ptr_mut_ref<T>(ptr: *mut T, Tracked(perm): Tracked<&mut PointsTo<T>>) -> 
         new(perm).value() == *new(v),
     unsafe { &*ptr }
 }
-*/        
-
-}
+*/
+} // verus!

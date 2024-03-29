@@ -35,6 +35,7 @@ pub mod pcm;
 pub mod pervasive;
 #[cfg(feature = "alloc")]
 pub mod ptr;
+pub mod raw_ptr;
 pub mod seq;
 pub mod seq_lib;
 pub mod set;
@@ -46,7 +47,6 @@ pub mod string;
 #[cfg(feature = "std")]
 pub mod thread;
 pub mod view;
-pub mod raw_ptr;
 
 pub mod relations;
 #[cfg(verus_keep_ghost)]
