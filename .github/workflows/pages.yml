@@ -18,7 +18,6 @@ env:
 
 jobs:
   build:
-    if: github.repository == 'verus-lang/verus'
     runs-on: ubuntu-22.04
     steps:
       - name: checkout
@@ -68,6 +67,12 @@ jobs:
         with:
           source: source/docs/verus
           destination: ./_site/verus
+
+      - name: upload _site for inspection (fork test only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-for-inspection
+          path: _site
 
       - name: upload artifact
         uses: actions/upload-pages-artifact@v3
