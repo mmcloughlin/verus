@@ -2,7 +2,7 @@ name: rolling-release
 
 on:
   push:
-    branches: [main]
+    branches: [restore-rolling-releases-fork-test]
   workflow_dispatch:
 
 permissions:
@@ -15,8 +15,6 @@ concurrency:
 jobs:
   # build the release artifacts
   build:
-    if: github.repository == 'verus-lang/verus'
-
     strategy:
       matrix:
         build: [macos, macos-x86_64, linux, windows]
@@ -110,7 +108,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          id: 163437062
+          id: 321367564
           new_name: Rolling Release ${{ env.RELEASE_NAME }}
           new_body: |
             Rolling release from Continuous Integration
@@ -163,6 +161,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          id: 163437062
+          id: 321367564
           new_tag: ${{ env.TAG_NAME }}
           new_draft_status: false

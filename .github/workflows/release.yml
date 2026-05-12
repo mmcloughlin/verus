@@ -11,7 +11,6 @@ permissions:
 jobs:
   copy-release:
     runs-on: ubuntu-22.04
-    if: github.repository == 'verus-lang/verus'
 
     steps:
       - name: Get Release Info
@@ -20,7 +19,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           release_info=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            https://api.github.com/repos/verus-lang/verus/releases/163437062)
+            https://api.github.com/repos/mmcloughlin/verus/releases/321367564)
           echo release_tag="$(echo $release_info | jq -cr '.tag_name')" >> $GITHUB_ENV
           echo release_name="$(echo $release_info | jq -cr '.name')" >> $GITHUB_ENV
           echo release_assets="""$(echo $release_info | jq -cr '.assets')""" >> $GITHUB_ENV
@@ -43,7 +42,7 @@ jobs:
           response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"tag_name\": \"$new_release_tag\", \"name\": \"$new_release_name\", \"body\": \"$release_tag\"}" \
-            https://api.github.com/repos/verus-lang/verus/releases)
+            https://api.github.com/repos/mmcloughlin/verus/releases)
           echo $new_release_tag $new_release_name $response
           new_release_id=$(echo $response | jq -r '.id')
           echo "new_release_id=$new_release_id" >> $GITHUB_ENV
@@ -65,5 +64,5 @@ jobs:
             curl -X POST -H "Authorization: token $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
               --data-binary @$asset_name \
-              "https://uploads.github.com/repos/verus-lang/verus/releases/$new_release_id/assets?name=$asset_name"
+              "https://uploads.github.com/repos/mmcloughlin/verus/releases/$new_release_id/assets?name=$asset_name"
           done
