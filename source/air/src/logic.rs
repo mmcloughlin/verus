@@ -3,7 +3,7 @@
 use std::fmt;
 
 /// An SMT-LIB logic.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Logic {
     /// Quantifier-free bit-vectors.
     QfBv,
@@ -14,6 +14,7 @@ pub enum Logic {
     /// Bit-vectors and IEEE floating point, with quantifiers.
     BvFp,
     /// All supported theories.
+    #[default]
     All,
 }
 
