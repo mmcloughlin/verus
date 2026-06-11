@@ -2224,7 +2224,7 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
 
             let queries = bv_to_queries(ctx, requires, ensures)?;
 
-            for (query, error_desc) in queries.into_iter() {
+            for bvq in queries.into_iter() {
                 state.commands.push(CommandsWithContextX::new(
                     ctx.fun
                         .as_ref()
@@ -2232,8 +2232,8 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
                         .current_fun
                         .clone(),
                     stm.span.clone(),
-                    error_desc,
-                    Arc::new(vec![Arc::new(CommandX::CheckValid(query))]),
+                    bvq.error,
+                    Arc::new(vec![Arc::new(CommandX::CheckValid(bvq.query))]),
                     ProverChoice::BitVector,
                     true,
                 ));
@@ -2946,12 +2946,12 @@ pub(crate) fn body_stm_to_air(
         let queries = bv_to_queries(ctx, reqs, &post_condition.ens_exps)?;
         let mut commands = vec![];
 
-        for (query, error_desc) in queries.into_iter() {
+        for bvq in queries.into_iter() {
             commands.push(CommandsWithContextX::new(
                 ctx.fun.as_ref().expect("function expected here").current_fun.clone(),
                 func_span.clone(),
-                error_desc,
-                Arc::new(vec![Arc::new(CommandX::CheckValid(query))]),
+                bvq.error,
+                Arc::new(vec![Arc::new(CommandX::CheckValid(bvq.query))]),
                 ProverChoice::BitVector,
                 true,
             ));

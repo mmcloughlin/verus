@@ -17,6 +17,7 @@ use air::ast_util::{
     bool_typ, mk_and, mk_bit_vec_one, mk_bit_vec_zero, mk_implies, mk_ite, mk_or, mk_unnamed_axiom,
     mk_xor, str_typ, string_var,
 };
+use air::logic::Logic;
 use air::scope_map::ScopeMap;
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Zero};
@@ -29,7 +30,7 @@ pub(crate) fn bv_to_queries(
     ctx: &Ctx,
     reqs: &Vec<Exp>,
     enss: &Vec<Exp>,
-) -> Result<Vec<(Query, String)>, VirErr> {
+) -> Result<Vec<BvQuery>, VirErr> {
     let reqs = vec_map_result(reqs, |e| bv_maybe_split(ctx, e))?;
     let enss = vec_map_result(enss, |e| bv_maybe_split(ctx, e))?;
 
@@ -42,21 +43,75 @@ pub(crate) fn bv_to_queries(
     }
 }
 
-pub struct BvSpecialized {
-    pub expr: Expr,
-    pub decls: Vec<(Ident, air::ast::Typ)>,
-    pub specialized: Option<u32>,
-    pub span: Span,
+/// The non-bit-vector theories a bit_vector query introduces, accumulated as it is translated.
+/// (Integers are always bit-blasted to a fixed width, so there is no `int`.) These determine the
+/// query's SMT [`Logic`]; self-containment is guaranteed by construction.
+#[derive(Clone, Copy, Default)]
+struct BvFeatures {
+    fp: bool,
+    real: bool,
+    quant: bool,
+}
+
+impl BvFeatures {
+    fn merge(self, other: BvFeatures) -> BvFeatures {
+        BvFeatures {
+            fp: self.fp || other.fp,
+            real: self.real || other.real,
+            quant: self.quant || other.quant,
+        }
+    }
+
+    /// Fold a type the query uses into the feature set.
+    fn record_typ(&mut self, typ: BvTyp) {
+        match typ {
+            BvTyp::Float { .. } => self.fp = true,
+            BvTyp::Real => self.real = true,
+            BvTyp::Bool | BvTyp::Bv(..) => {}
+        }
+    }
+
+    /// The tightest logic these features require. Real is the one feature outside the
+    /// bit-vector/float fragment, so a real-bearing query falls back to `ALL`; everything else is
+    /// bit-vectors, optionally with floating point, optionally quantified.
+    fn logic(self) -> Logic {
+        if self.real {
+            return Logic::All;
+        }
+        match (self.fp, self.quant) {
+            (false, false) => Logic::QfBv,
+            (false, true) => Logic::Bv,
+            (true, false) => Logic::QfBvFp,
+            (true, true) => Logic::BvFp,
+        }
+    }
+}
+
+struct BvSpecialized {
+    expr: Expr,
+    decls: Vec<(Ident, air::ast::Typ)>,
+    specialized: Option<u32>,
+    span: Span,
+    features: BvFeatures,
+}
+
+/// A translated bit_vector query: the SMT query, its error message, and the SMT logic its sorts and
+/// operators require.
+pub(crate) struct BvQuery {
+    pub query: Query,
+    pub error: String,
+    pub logic: Logic,
 }
 
 fn make_query(
     reqs: &Vec<Vec<BvSpecialized>>,
     enss: &Vec<Vec<BvSpecialized>>,
     sp: Option<u32>,
-) -> (Query, String) {
+) -> BvQuery {
     let mut requires_air: Vec<Expr> = vec![];
     let mut ensures_air: Vec<(Span, Expr)> = vec![];
     let mut all_decl_lists: Vec<&Vec<(Ident, air::ast::Typ)>> = vec![];
+    let mut features = BvFeatures::default();
 
     fn get_sp(v: &Vec<BvSpecialized>, sp: Option<u32>) -> &BvSpecialized {
         match sp {
@@ -80,11 +135,13 @@ fn make_query(
         let r = get_sp(rs, sp);
         requires_air.push(r.expr.clone());
         all_decl_lists.push(&r.decls);
+        features = features.merge(r.features);
     }
     for es in enss.iter() {
         let e = get_sp(es, sp);
         ensures_air.push((e.span.clone(), e.expr.clone()));
         all_decl_lists.push(&e.decls);
+        features = features.merge(e.features);
     }
 
     let mut all_decls_map = HashMap::<Ident, air::ast::Typ>::new();
@@ -120,7 +177,7 @@ fn make_query(
     };
     let error = format!("bitvector assertion not satisfied{}", special_note);
 
-    (query, error)
+    BvQuery { query, error, logic: features.logic() }
 }
 
 fn bv_maybe_split(ctx: &Ctx, exp: &Exp) -> Result<Vec<BvSpecialized>, VirErr> {
@@ -131,8 +188,13 @@ fn bv_maybe_split(ctx: &Ctx, exp: &Exp) -> Result<Vec<BvSpecialized>, VirErr> {
     // is arch-dependent. After bv_exp_to_expr, we check to see if that happens, and if so,
     // we perform the second run.
 
-    let mut state =
-        State { arch: ctx.global.arch, decls: vec![], scope_map: ScopeMap::new(), id_idx: 0 };
+    let mut state = State {
+        arch: ctx.global.arch,
+        decls: vec![],
+        scope_map: ScopeMap::new(),
+        id_idx: 0,
+        features: BvFeatures::default(),
+    };
     let BvExpr { expr: expr1, bv_typ } = bv_exp_to_expr(ctx, &mut state, exp)?;
     bv_typ.expect_bool(&exp.span)?;
     let mut bv_sp1 = BvSpecialized {
@@ -140,6 +202,7 @@ fn bv_maybe_split(ctx: &Ctx, exp: &Exp) -> Result<Vec<BvSpecialized>, VirErr> {
         decls: state.decls,
         specialized: None,
         span: exp.span.clone(),
+        features: state.features,
     };
 
     if state.arch != ctx.global.arch {
@@ -151,6 +214,7 @@ fn bv_maybe_split(ctx: &Ctx, exp: &Exp) -> Result<Vec<BvSpecialized>, VirErr> {
             decls: vec![],
             scope_map: ScopeMap::new(),
             id_idx: 0,
+            features: BvFeatures::default(),
         };
         let BvExpr { expr: expr2, bv_typ } = bv_exp_to_expr(ctx, &mut state, exp)?;
         bv_typ.expect_bool(&exp.span)?;
@@ -160,6 +224,7 @@ fn bv_maybe_split(ctx: &Ctx, exp: &Exp) -> Result<Vec<BvSpecialized>, VirErr> {
             decls: state.decls,
             specialized: Some(64),
             span: exp.span.clone(),
+            features: state.features,
         };
         bv_sp1.specialized = Some(32);
         Ok(vec![bv_sp1, bv_sp2])
@@ -171,6 +236,7 @@ fn bv_maybe_split(ctx: &Ctx, exp: &Exp) -> Result<Vec<BvSpecialized>, VirErr> {
 struct State {
     pub arch: ArchWordBits,
     pub decls: Vec<(Ident, air::ast::Typ)>,
+    pub features: BvFeatures,
     pub scope_map: ScopeMap<crate::ast::VarIdent, BvTyp>,
     pub id_idx: u64,
 }
@@ -282,16 +348,19 @@ fn bv_exp_to_expr(ctx: &Ctx, state: &mut State, exp: &Exp) -> Result<BvExpr, Vir
             Ok(BvExpr { expr: Arc::new(ExprX::Const(Constant::Bool(*b))), bv_typ: BvTyp::Bool })
         }
         ExpX::Const(crate::ast::Constant::Float32(i)) => {
+            state.features.record_typ(f32_typ());
             let e_i = Arc::new(ExprX::Const(Constant::BitVec(Arc::new(i.to_string()), 32)));
             let op = air::ast::UnaryOp::FloatFromIeeeBits { exp_bits: 8, sig_bits: 24 };
             Ok(BvExpr { expr: Arc::new(ExprX::Unary(op, e_i)), bv_typ: f32_typ() })
         }
         ExpX::Const(crate::ast::Constant::Float64(i)) => {
+            state.features.record_typ(f64_typ());
             let e_i = Arc::new(ExprX::Const(Constant::BitVec(Arc::new(i.to_string()), 64)));
             let op = air::ast::UnaryOp::FloatFromIeeeBits { exp_bits: 11, sig_bits: 53 };
             Ok(BvExpr { expr: Arc::new(ExprX::Unary(op, e_i)), bv_typ: f64_typ() })
         }
         ExpX::Const(crate::ast::Constant::Real(r)) => {
+            state.features.record_typ(BvTyp::Real);
             Ok(BvExpr { expr: air::ast_util::mk_real(r), bv_typ: BvTyp::Real })
         }
         ExpX::Var(x) => {
@@ -713,6 +782,7 @@ fn bv_exp_to_expr(ctx: &Ctx, state: &mut State, exp: &Exp) -> Result<BvExpr, Vir
                 Ok(BvExpr { expr, bv_typ: body.bv_typ })
             }
             BndX::Quant(quant, binders, _trigs, _) => {
+                state.features.quant = true;
                 state.scope_map.push_scope(true);
                 for b in binders.iter() {
                     let bv_typ = bv_typ_for_vir_typ(state, &exp.span, &b.a)?;
@@ -996,29 +1066,31 @@ fn minimal_bv_for_const(i: &BigInt) -> (BvTyp, String) {
 }
 
 fn bv_typ_for_vir_typ(state: &mut State, span: &Span, typ: &Typ) -> Result<BvTyp, VirErr> {
-    if is_integer_type(typ) {
+    let bv_typ = if is_integer_type(typ) {
         // error if either:
         //  - it's an infinite width type / char
         let width = bitwidth_from_type(typ);
         let width = bitvector_expect_finite(state, span, typ, &width)?;
         let signed = is_integer_type_signed(typ);
-        Ok(BvTyp::Bv(width, if signed { Extend::Sign } else { Extend::Zero }))
+        BvTyp::Bv(width, if signed { Extend::Sign } else { Extend::Zero })
     } else if let Some(t) = allowed_bitvector_type(typ) {
         match &*t {
-            TypX::Bool => Ok(BvTyp::Bool),
-            TypX::Float(32) => Ok(f32_typ()),
-            TypX::Float(64) => Ok(f64_typ()),
-            TypX::Real => Ok(BvTyp::Real),
+            TypX::Bool => BvTyp::Bool,
+            TypX::Float(32) => f32_typ(),
+            TypX::Float(64) => f64_typ(),
+            TypX::Real => BvTyp::Real,
             _ => unreachable!(),
         }
     } else {
-        Err(error(
+        return Err(error(
             span,
             format!(
                 "error: bit_vector prover cannot handle type `{:}`", crate::ast_util::typ_to_diagnostic_str(typ)
             ),
-        ).help("bit_vector can only handle variables of type `bool`, fixed-width integers, or floating point"))
-    }
+        ).help("bit_vector can only handle variables of type `bool`, fixed-width integers, or floating point"));
+    };
+    state.features.record_typ(bv_typ);
+    Ok(bv_typ)
 }
 
 /// If no clip is given: compute `lhs op rhs` (losslessly)
