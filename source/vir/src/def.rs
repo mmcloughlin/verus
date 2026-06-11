@@ -970,6 +970,17 @@ impl ProverChoice {
     }
 }
 
+impl std::fmt::Display for ProverChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProverChoice::DefaultProver => write!(f, "default_prover"),
+            ProverChoice::Nonlinear => write!(f, "nonlinear"),
+            ProverChoice::BitVector(logic) => write!(f, "bit_vector:{logic}"),
+            ProverChoice::Singular => write!(f, "singular"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CommandContext {
     pub fun: Fun,
