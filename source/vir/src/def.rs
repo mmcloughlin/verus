@@ -3,6 +3,7 @@ use crate::ast_util::air_unique_var;
 use crate::messages::Span;
 use crate::util::vec_map;
 use air::ast::{Commands, Ident};
+use air::logic::Logic;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -954,12 +955,19 @@ impl<X: Debug> Debug for Spanned<X> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProverChoice {
     DefaultProver,
     Nonlinear,
-    BitVector,
+    /// Bit-vector proof restricted to the given logic.
+    BitVector(Logic),
     Singular,
+}
+
+impl ProverChoice {
+    pub fn is_bit_vector(&self) -> bool {
+        matches!(self, ProverChoice::BitVector(_))
+    }
 }
 
 #[derive(Clone, Debug)]

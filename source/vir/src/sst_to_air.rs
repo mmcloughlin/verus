@@ -2234,7 +2234,7 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
                     stm.span.clone(),
                     bvq.error,
                     Arc::new(vec![Arc::new(CommandX::CheckValid(bvq.query))]),
-                    ProverChoice::BitVector,
+                    ProverChoice::BitVector(bvq.logic),
                     true,
                 ));
             }
@@ -2952,7 +2952,7 @@ pub(crate) fn body_stm_to_air(
                 func_span.clone(),
                 bvq.error,
                 Arc::new(vec![Arc::new(CommandX::CheckValid(bvq.query))]),
-                ProverChoice::BitVector,
+                ProverChoice::BitVector(bvq.logic),
                 true,
             ));
         }

@@ -1226,7 +1226,7 @@ impl Verifier {
 
         // A by(bit_vector) query is self-contained, so it runs prelude-free: it omits the
         // recommended-options preset, the prelude, and the bucket background.
-        let bitvector = prover_choice == vir::def::ProverChoice::BitVector;
+        let bitvector = prover_choice.is_bit_vector();
         if !bitvector {
             air_context.set_z3_param("air_recommended_options", "true");
         }
@@ -1259,7 +1259,7 @@ impl Verifier {
         prover_choice: vir::def::ProverChoice,
     ) {
         match prover_choice {
-            vir::def::ProverChoice::BitVector => {
+            vir::def::ProverChoice::BitVector(_) => {
                 // A prelude-free by(bit_vector) query carries no per-query
                 // options: solver defaults work well.
                 //
@@ -1306,7 +1306,7 @@ impl Verifier {
         air_context.comment(&format!("query spun off because: {}", spinoff_reason));
 
         // set up bucket context (skipped for a prelude-free bit_vector query)
-        if prover_choice != vir::def::ProverChoice::BitVector {
+        if !prover_choice.is_bit_vector() {
             self.run_command_batches(bucket_id, diagnostics, &mut air_context, bucket_context);
         }
 
@@ -1528,7 +1528,7 @@ impl Verifier {
                             let mut spinoff_z3_context;
                             let do_spinoff = (cmds.prover_choice
                                 == vir::def::ProverChoice::Nonlinear)
-                                || (cmds.prover_choice == vir::def::ProverChoice::BitVector)
+                                || cmds.prover_choice.is_bit_vector()
                                 || *profile_rerun
                                 || self.args.spinoff_all;
 
@@ -1560,7 +1560,7 @@ impl Verifier {
                                     == vir::def::ProverChoice::Nonlinear
                                 {
                                     "nonlinear"
-                                } else if cmds.prover_choice == vir::def::ProverChoice::BitVector {
+                                } else if cmds.prover_choice.is_bit_vector() {
                                     "bitvector"
                                 } else if *profile_rerun {
                                     "profile_rerun"
@@ -1581,7 +1581,7 @@ impl Verifier {
                                     cmds.prover_choice,
                                 )?;
                                 // for bitvector, only one query, no push/pop
-                                if cmds.prover_choice == vir::def::ProverChoice::BitVector {
+                                if cmds.prover_choice.is_bit_vector() {
                                     spinoff_z3_context.set_single_check_query();
                                 }
                                 // Apply prover-specific SMT tuning.
