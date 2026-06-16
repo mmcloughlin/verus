@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   coverage:
-    if: github.repository == 'verus-lang/verus'
+    # SMOKE TEST: guard relaxed so this runs on the fork (do not merge).
     runs-on: ubuntu-22.04
 
     steps:
