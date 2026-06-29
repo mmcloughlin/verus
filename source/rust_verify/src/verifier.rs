@@ -1582,8 +1582,11 @@ impl Verifier {
                                 )?;
                                 spinoff_z3_context.comment(&format!("prover: {}", cmds.prover_choice));
                                 // for bitvector, only one query, no push/pop
-                                if cmds.prover_choice.is_bit_vector() {
+                                if let vir::def::ProverChoice::BitVector(logic) =
+                                    cmds.prover_choice
+                                {
                                     spinoff_z3_context.set_single_check_query();
+                                    spinoff_z3_context.set_query_logic(logic);
                                 }
                                 // Apply prover-specific SMT tuning.
                                 self.apply_per_query_smt_options(

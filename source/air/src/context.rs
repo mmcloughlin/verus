@@ -112,6 +112,9 @@ pub struct Context {
     pub(crate) expected_solver_version: Option<String>,
     pub(crate) profile_logfile_name: Option<String>,
     pub(crate) single_check_query: bool,
+    // When set, the query is self-contained under this logic: emit `(set-logic ...)` and skip the
+    // prelude's uninterpreted `%%Function%%` sort (so a bit-vector query is genuinely QF_BV, etc.).
+    pub(crate) query_logic: Option<crate::logic::Logic>,
     pub(crate) usage_info_enabled: bool,
     pub(crate) check_valid_used: bool,
     pub(crate) solver: SmtSolver,
@@ -179,6 +182,7 @@ impl Context {
             expected_solver_version: None,
             profile_logfile_name: None,
             single_check_query: false,
+            query_logic: None,
             usage_info_enabled: false,
             check_valid_used: false,
             solver,
@@ -273,6 +277,13 @@ impl Context {
         self.air_initial_log.log_set_option("single_check_query", "true");
         self.air_middle_log.log_set_option("single_check_query", "true");
         self.air_final_log.log_set_option("single_check_query", "true");
+    }
+
+    /// Declare the query self-contained under `logic`: emit `(set-logic <logic>)` and skip the
+    /// prelude's uninterpreted %%Function%% sort. Must be set before the first query starts.
+    pub fn set_query_logic(&mut self, logic: crate::logic::Logic) {
+        assert!(matches!(self.state, ContextState::NotStarted));
+        self.query_logic = Some(logic);
     }
 
     pub fn enable_usage_info(&mut self) {
@@ -410,7 +421,15 @@ impl Context {
                 }
                 self.blank_line();
                 self.comment("AIR prelude");
-                self.smt_log.log_node(&node!((declare-sort {str_to_node(crate::def::FUNCTION)} 0)));
+                if let Some(logic) = self.query_logic {
+                    // The query is self-contained under this logic, so name it and skip the prelude's
+                    // uninterpreted %%Function%% sort (which the query never references): a bit-vector
+                    // query is then genuinely QF_BV rather than QF_UFBV.
+                    self.smt_log.log_node(&node!((set-logic {str_to_node(logic.as_str())})));
+                } else {
+                    self.smt_log
+                        .log_node(&node!((declare-sort {str_to_node(crate::def::FUNCTION)} 0)));
+                }
                 self.blank_line();
                 self.state = ContextState::ReadyForQuery;
             }
